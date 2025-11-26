@@ -1,0 +1,8 @@
+@import "tailwindcss";
+@import "@nuxt/ui";
+
+/* 配置主题颜色 */
+:root {
+  --ui-primary: var(--color-green-500);
+  --ui-neutral: var(--color-slate-500);
+}

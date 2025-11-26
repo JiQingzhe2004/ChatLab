@@ -1,0 +1,64 @@
+# 应用程序的唯一标识符
+appId: com.chatlens.app
+# 应用程序的产品名称
+productName: ChatLens
+# 构建资源所在的目录
+directories:
+  buildResources: build
+# 包含在最终应用程序构建中的文件列表
+files:
+  - '!**/.vscode/*'
+  - '!src/*'
+  - '!electron.vite.config.{js,ts,mjs,cjs}'
+  - '!{.eslintignore,.eslintrc.cjs,.prettierignore,.prettierrc.yaml,CHANGELOG.md,README.md}'
+  - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
+  - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
+# 哪些文件将不会被压缩，而是解压到构建目录
+asarUnpack:
+  - resources/**
+
+# Windows 平台配置
+win:
+  executableName: ChatLens
+  target: nsis
+
+# NSIS 安装器配置
+nsis:
+  oneClick: false
+  artifactName: ChatLens-${version}-setup.${ext}
+  shortcutName: ${productName}
+  uninstallDisplayName: ${productName}
+  createDesktopShortcut: always
+  allowElevation: true
+  allowToChangeInstallationDirectory: true
+  installerIcon: build/icon.ico
+  uninstallerIcon: build/icon.ico
+
+# macOS 平台配置
+mac:
+  entitlementsInherit: build/entitlements.mac.plist
+  extendInfo:
+    - NSDocumentsFolderUsageDescription: Application requests access to the user's Documents folder.
+    - NSDownloadsFolderUsageDescription: Application requests access to the user's Downloads folder.
+
+# macOS 平台的 DMG 配置
+dmg:
+  artifactName: ChatLens-${version}.${ext}
+
+# Linux 平台配置
+linux:
+  executableName: chatlens
+  icon: build/icon.png
+  target:
+    - AppImage
+    - deb
+    - rpm
+    - tar.gz
+  category: Utility
+
+# AppImage 配置
+appImage:
+  artifactName: ChatLens-${version}.${ext}
+
+# 是否在构建之前重新编译原生模块
+npmRebuild: false
