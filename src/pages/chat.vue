@@ -10,6 +10,7 @@ import OverviewTab from '@/components/analysis/OverviewTab.vue'
 import MembersTab from '@/components/analysis/MembersTab.vue'
 import TimeTab from '@/components/analysis/TimeTab.vue'
 import TimelineTab from '@/components/analysis/TimelineTab.vue'
+import KeywordsTab from '@/components/analysis/KeywordsTab.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -34,11 +35,12 @@ const isInitialLoad = ref(true) // 用于跳过初始加载时的 watch 触发�
 const tabs = [
   { id: 'overview', label: '总览', icon: 'i-heroicons-chart-pie' },
   { id: 'members', label: '成员', icon: 'i-heroicons-user-group' },
+  { id: 'keywords', label: '关键词', icon: 'i-heroicons-document-text' },
   { id: 'time', label: '规律', icon: 'i-heroicons-clock' },
   { id: 'timeline', label: '趋势', icon: 'i-heroicons-chart-bar' },
 ]
 
-const activeTab = ref('overview')
+const activeTab = ref((route.query.tab as string) || 'overview')
 
 // 计算时间过滤参数
 const timeFilter = computed(() => {
@@ -116,8 +118,14 @@ async function loadBaseData() {
     availableYears.value = years
     timeRange.value = range
 
-    // 默认选择最近的年份（years 已按降序排列）
-    if (years.length > 0) {
+    // 初始化年份选择
+    // 1. 优先使用 URL 参数中的年份
+    // 2. 否则默认选择最近的年份（years 已按降序排列）
+    // 3. 如果没有年份数据，选 0 (全部)
+    const queryYear = Number(route.query.year)
+    if (queryYear && years.includes(queryYear)) {
+      selectedYear.value = queryYear
+    } else if (years.length > 0) {
       selectedYear.value = years[0]
     } else {
       selectedYear.value = 0
@@ -166,6 +174,15 @@ async function loadData() {
 watch(
   () => route.params.id,
   () => {
+    // 切换会话时，重置 activeTab 为默认值（如果 URL 中没有 tab 参数）
+    // 注意：sidebar 导航通常会 push 新的 URL，不带 query 参数，所以这里会自动重置
+    // 但为了保险，我们可以在这里强制重置，或者依赖 activeTab 的初始化逻辑（它只在组件创建时初始化）
+    // 由于组件是复用的，我们需要手动处理
+    if (!route.query.tab) {
+      activeTab.value = 'overview'
+    } else {
+      activeTab.value = route.query.tab as string
+    }
     syncSession()
   }
 )
@@ -185,6 +202,20 @@ watch(selectedYear, () => {
   // 跳过初始加载时的触发，避免重复加载
   if (isInitialLoad.value) return
   loadAnalysisData()
+})
+
+// 同步状态到 URL
+watch([activeTab, selectedYear], ([newTab, newYear]) => {
+  // 避免在初始化过程中频繁更新 URL
+  if (isInitialLoad.value) return
+
+  router.replace({
+    query: {
+      ...route.query,
+      tab: newTab,
+      year: newYear || undefined,
+    },
+  })
 })
 
 onMounted(() => {
@@ -258,6 +289,14 @@ onMounted(() => {
 
       <!-- Tab Content -->
       <div class="relative flex-1 overflow-y-auto">
+        <!-- Loading Overlay -->
+        <div
+          v-if="isLoading"
+          class="absolute inset-0 z-10 flex items-center justify-center bg-white/50 backdrop-blur-sm dark:bg-gray-950/50"
+        >
+          <UIcon name="i-heroicons-arrow-path" class="h-8 w-8 animate-spin text-pink-500" />
+        </div>
+
         <!-- Content with padding -->
         <div class="p-6">
           <Transition name="tab-slide" mode="out-in">
@@ -280,6 +319,12 @@ onMounted(() => {
               :key="'members-' + selectedYear"
               :session-id="currentSessionId!"
               :member-activity="memberActivity"
+              :time-filter="timeFilter"
+            />
+            <KeywordsTab
+              v-else-if="activeTab === 'keywords'"
+              :key="'keywords-' + selectedYear"
+              :session-id="currentSessionId!"
               :time-filter="timeFilter"
             />
             <TimeTab

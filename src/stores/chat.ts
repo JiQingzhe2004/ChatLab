@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type { AnalysisSession, ImportProgress } from '@/types/chat'
+import type { AnalysisSession, ImportProgress, KeywordTemplate } from '@/types/chat'
 
 export const useChatStore = defineStore(
   'chat',
@@ -204,6 +204,30 @@ export const useChatStore = defineStore(
       isSidebarCollapsed.value = !isSidebarCollapsed.value
     }
 
+    // ==================== 自定义关键词模板 ====================
+    const customKeywordTemplates = ref<KeywordTemplate[]>([])
+
+    function addCustomKeywordTemplate(template: KeywordTemplate) {
+      customKeywordTemplates.value.push(template)
+    }
+
+    function updateCustomKeywordTemplate(templateId: string, updates: Partial<Omit<KeywordTemplate, 'id'>>) {
+      const index = customKeywordTemplates.value.findIndex((t) => t.id === templateId)
+      if (index !== -1) {
+        customKeywordTemplates.value[index] = {
+          ...customKeywordTemplates.value[index],
+          ...updates,
+        }
+      }
+    }
+
+    function removeCustomKeywordTemplate(templateId: string) {
+      const index = customKeywordTemplates.value.findIndex((t) => t.id === templateId)
+      if (index !== -1) {
+        customKeywordTemplates.value.splice(index, 1)
+      }
+    }
+
     return {
       // State
       sessions,
@@ -212,6 +236,7 @@ export const useChatStore = defineStore(
       importProgress,
       isInitialized,
       isSidebarCollapsed,
+      customKeywordTemplates,
       // Computed
       currentSession,
       // Actions
@@ -222,14 +247,23 @@ export const useChatStore = defineStore(
       deleteSession,
       clearSelection,
       toggleSidebar,
+      addCustomKeywordTemplate,
+      updateCustomKeywordTemplate,
+      removeCustomKeywordTemplate,
     }
   },
   {
-    persist: {
-      // 使用 sessionStorage：页面刷新时保留，应用重启时清除
-      // 这样启动应用默认显示 WelcomeGuide，但刷新页面保留当前状态
-      pick: ['currentSessionId', 'isSidebarCollapsed'],
-      storage: sessionStorage,
-    },
+    persist: [
+      {
+        // 会话状态：sessionStorage（页面刷新保留，应用重启清除）
+        pick: ['currentSessionId', 'isSidebarCollapsed'],
+        storage: sessionStorage,
+      },
+      {
+        // 自定义模板：localStorage（持久保存）
+        pick: ['customKeywordTemplates'],
+        storage: localStorage,
+      },
+    ],
   }
 )

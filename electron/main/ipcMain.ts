@@ -486,6 +486,43 @@ const mainIpcMain = (win: BrowserWindow) => {
       }
     }
   )
+
+  /**
+   * 获取 @ 互动分析数据
+   */
+  ipcMain.handle(
+    'chat:getMentionAnalysis',
+    async (_, sessionId: string, filter?: { startTs?: number; endTs?: number }) => {
+      try {
+        return await worker.getMentionAnalysis(sessionId, filter)
+      } catch (error) {
+        console.error('获取 @ 互动分析失败：', error)
+        return { topMentioners: [], topMentioned: [], oneWay: [], twoWay: [], totalMentions: 0, memberDetails: [] }
+      }
+    }
+  )
+
+  /**
+   * 获取含笑量分析数据
+   */
+  ipcMain.handle(
+    'chat:getLaughAnalysis',
+    async (_, sessionId: string, filter?: { startTs?: number; endTs?: number }, keywords?: string[]) => {
+      try {
+        return await worker.getLaughAnalysis(sessionId, filter, keywords)
+      } catch (error) {
+        console.error('获取含笑量分析失败：', error)
+        return {
+          rankByRate: [],
+          rankByCount: [],
+          typeDistribution: [],
+          totalLaughs: 0,
+          totalMessages: 0,
+          groupLaughRate: 0,
+        }
+      }
+    }
+  )
 }
 
 export default mainIpcMain

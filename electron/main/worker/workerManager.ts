@@ -227,6 +227,14 @@ export async function getMonologueAnalysis(sessionId: string, filter?: any): Pro
   return sendToWorker('getMonologueAnalysis', { sessionId, filter })
 }
 
+export async function getMentionAnalysis(sessionId: string, filter?: any): Promise<any> {
+  return sendToWorker('getMentionAnalysis', { sessionId, filter })
+}
+
+export async function getLaughAnalysis(sessionId: string, filter?: any, keywords?: string[]): Promise<any> {
+  return sendToWorker('getLaughAnalysis', { sessionId, filter, keywords })
+}
+
 export async function getAllSessions(): Promise<any[]> {
   return sendToWorker('getAllSessions', {})
 }
@@ -245,4 +253,3 @@ export async function closeDatabase(sessionId: string): Promise<void> {
 export function getDbDirectory(): string {
   return getDbDir()
 }
-

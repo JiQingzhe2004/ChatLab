@@ -452,3 +452,142 @@ export interface RepeatAnalysis {
   /** 复读链总数 */
   totalRepeatChains: number
 }
+
+// ==================== @ 互动分析类型 ====================
+
+/**
+ * @ 排行榜项
+ */
+export interface MentionRankItem {
+  memberId: number
+  platformId: string
+  name: string
+  count: number // @ 次数
+  percentage: number // 占比
+}
+
+/**
+ * @ 关系对（谁 @ 谁）
+ */
+export interface MentionPair {
+  fromMemberId: number
+  fromName: string
+  toMemberId: number
+  toName: string
+  count: number // @ 次数
+}
+
+/**
+ * 单向关注（舔狗检测）
+ */
+export interface OneWayMention {
+  fromMemberId: number
+  fromName: string
+  toMemberId: number
+  toName: string
+  fromToCount: number // A @ B 的次数
+  toFromCount: number // B @ A 的次数
+  ratio: number // 单向比例 (fromToCount / (fromToCount + toFromCount))
+}
+
+/**
+ * 双向奔赴（CP检测）
+ */
+export interface TwoWayMention {
+  member1Id: number
+  member1Name: string
+  member2Id: number
+  member2Name: string
+  member1To2: number // A @ B
+  member2To1: number // B @ A
+  total: number // 总互动次数
+  balance: number // 平衡度 (较小值 / 较大值)，越接近 1 越平衡
+}
+
+/**
+ * 成员的 @ 详情（点击成员查看其 @ 关系）
+ */
+export interface MemberMentionDetail {
+  memberId: number
+  name: string
+  /** 该成员最常 @ 的人 TOP N */
+  topMentioned: MentionPair[]
+  /** 最常 @ 该成员的人 TOP N */
+  topMentioners: MentionPair[]
+}
+
+/**
+ * @ 互动分析结果
+ */
+export interface MentionAnalysis {
+  /** 发起 @ 最多的人排行 */
+  topMentioners: MentionRankItem[]
+  /** 被 @ 最多的人排行 */
+  topMentioned: MentionRankItem[]
+  /** 单向关注列表（舔狗检测） */
+  oneWay: OneWayMention[]
+  /** 双向奔赴列表（CP检测） */
+  twoWay: TwoWayMention[]
+  /** @ 总次数 */
+  totalMentions: number
+  /** 所有成员的 @ 详情（用于点击查看详细关系） */
+  memberDetails: MemberMentionDetail[]
+}
+
+// ==================== 含笑量分析类型 ====================
+
+/**
+ * 含笑量排名项
+ */
+export interface LaughRankItem {
+  memberId: number
+  platformId: string
+  name: string
+  laughCount: number // 笑声关键词出现次数
+  messageCount: number // 该成员总消息数
+  laughRate: number // 含笑率（laughCount / messageCount * 100）
+  percentage: number // 贡献占比（laughCount / 全群总笑声 * 100）
+  keywordDistribution: Array<{
+    keyword: string
+    count: number
+    percentage: number
+  }> // 各关键词分布
+}
+
+/**
+ * 笑声类型分布项
+ */
+export interface LaughTypeDistribution {
+  type: string // 关键词类型（如 "哈哈"、"233" 等）
+  count: number // 出现次数
+  percentage: number // 占比
+}
+
+/**
+ * 含笑量分析结果
+ */
+export interface LaughAnalysis {
+  /** 按含笑率排序的排行榜 */
+  rankByRate: LaughRankItem[]
+  /** 按贡献度排序的排行榜 */
+  rankByCount: LaughRankItem[]
+  /** 笑声类型分布 */
+  typeDistribution: LaughTypeDistribution[]
+  /** 全群总笑声次数 */
+  totalLaughs: number
+  /** 全群总消息数 */
+  totalMessages: number
+  /** 群整体含笑率 */
+  groupLaughRate: number
+}
+
+// ==================== 关键词模板 ====================
+
+/**
+ * 自定义关键词模板
+ */
+export interface KeywordTemplate {
+  id: string
+  name: string
+  keywords: string[]
+}

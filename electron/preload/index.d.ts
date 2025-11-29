@@ -14,6 +14,8 @@ import type {
   DragonKingAnalysis,
   DivingAnalysis,
   MonologueAnalysis,
+  MentionAnalysis,
+  LaughAnalysis,
 } from '../../src/types/chat'
 
 interface TimeFilter {
@@ -47,6 +49,8 @@ interface ChatApi {
   getDragonKingAnalysis: (sessionId: string, filter?: TimeFilter) => Promise<DragonKingAnalysis>
   getDivingAnalysis: (sessionId: string, filter?: TimeFilter) => Promise<DivingAnalysis>
   getMonologueAnalysis: (sessionId: string, filter?: TimeFilter) => Promise<MonologueAnalysis>
+  getMentionAnalysis: (sessionId: string, filter?: TimeFilter) => Promise<MentionAnalysis>
+  getLaughAnalysis: (sessionId: string, filter?: TimeFilter, keywords?: string[]) => Promise<LaughAnalysis>
 }
 
 interface Api {

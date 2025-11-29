@@ -35,7 +35,7 @@ onMounted(async () => {
         <main class="flex-1 overflow-hidden">
           <router-view v-slot="{ Component }">
             <Transition name="page-fade" mode="out-in">
-              <component :is="Component" :key="route.fullPath" />
+              <component :is="Component" :key="route.path" />
             </Transition>
           </router-view>
         </main>

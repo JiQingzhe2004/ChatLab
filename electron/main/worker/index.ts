@@ -22,9 +22,10 @@ export {
   getDragonKingAnalysis,
   getDivingAnalysis,
   getMonologueAnalysis,
+  getMentionAnalysis,
+  getLaughAnalysis,
   // 会话管理 API（异步）
   getAllSessions,
   getSession,
   closeDatabase,
 } from './workerManager'
-

@@ -30,6 +30,8 @@ import {
   getDragonKingAnalysis,
   getDivingAnalysis,
   getMonologueAnalysis,
+  getMentionAnalysis,
+  getLaughAnalysis,
 } from './queryAdvanced'
 
 // 初始化数据库目录
@@ -74,6 +76,8 @@ const handlers: Record<string, (payload: any) => any> = {
   getDragonKingAnalysis: (p) => getDragonKingAnalysis(p.sessionId, p.filter),
   getDivingAnalysis: (p) => getDivingAnalysis(p.sessionId, p.filter),
   getMonologueAnalysis: (p) => getMonologueAnalysis(p.sessionId, p.filter),
+  getMentionAnalysis: (p) => getMentionAnalysis(p.sessionId, p.filter),
+  getLaughAnalysis: (p) => getLaughAnalysis(p.sessionId, p.filter, p.keywords),
 }
 
 // 处理消息

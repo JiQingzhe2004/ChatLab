@@ -15,6 +15,8 @@ import type {
   DragonKingAnalysis,
   DivingAnalysis,
   MonologueAnalysis,
+  MentionAnalysis,
+  LaughAnalysis,
 } from '../../src/types/chat'
 
 // Custom APIs for renderer
@@ -119,7 +121,10 @@ const chatApi = {
   /**
    * 获取星期活跃度分布
    */
-  getWeekdayActivity: (sessionId: string, filter?: { startTs?: number; endTs?: number }): Promise<WeekdayActivity[]> => {
+  getWeekdayActivity: (
+    sessionId: string,
+    filter?: { startTs?: number; endTs?: number }
+  ): Promise<WeekdayActivity[]> => {
     return ipcRenderer.invoke('chat:getWeekdayActivity', sessionId, filter)
   },
 
@@ -207,10 +212,7 @@ const chatApi = {
   /**
    * 获取潜水分析数据
    */
-  getDivingAnalysis: (
-    sessionId: string,
-    filter?: { startTs?: number; endTs?: number }
-  ): Promise<DivingAnalysis> => {
+  getDivingAnalysis: (sessionId: string, filter?: { startTs?: number; endTs?: number }): Promise<DivingAnalysis> => {
     return ipcRenderer.invoke('chat:getDivingAnalysis', sessionId, filter)
   },
 
@@ -222,6 +224,24 @@ const chatApi = {
     filter?: { startTs?: number; endTs?: number }
   ): Promise<MonologueAnalysis> => {
     return ipcRenderer.invoke('chat:getMonologueAnalysis', sessionId, filter)
+  },
+
+  /**
+   * 获取 @ 互动分析数据
+   */
+  getMentionAnalysis: (sessionId: string, filter?: { startTs?: number; endTs?: number }): Promise<MentionAnalysis> => {
+    return ipcRenderer.invoke('chat:getMentionAnalysis', sessionId, filter)
+  },
+
+  /**
+   * 获取含笑量分析数据
+   */
+  getLaughAnalysis: (
+    sessionId: string,
+    filter?: { startTs?: number; endTs?: number },
+    keywords?: string[]
+  ): Promise<LaughAnalysis> => {
+    return ipcRenderer.invoke('chat:getLaughAnalysis', sessionId, filter, keywords)
   },
 }
 

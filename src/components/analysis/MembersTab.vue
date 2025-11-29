@@ -7,6 +7,8 @@ import type {
   CatchphraseAnalysis,
   DragonKingAnalysis,
   MonologueAnalysis,
+  MentionAnalysis,
+  MemberMentionDetail,
 } from '@/types/chat'
 import { RankListPro, BarChart, ListPro } from '@/components/charts'
 import type { RankItem, BarChartData } from '@/components/charts'
@@ -168,6 +170,53 @@ const memberRankData = computed<RankItem[]>(() => {
   }))
 })
 
+// ==================== @ 互动分析 ====================
+const mentionAnalysis = ref<MentionAnalysis | null>(null)
+const isLoadingMention = ref(false)
+const selectedMemberDetail = ref<MemberMentionDetail | null>(null)
+const showMemberDetailModal = ref(false)
+
+async function loadMentionAnalysis() {
+  if (!props.sessionId) return
+  isLoadingMention.value = true
+  try {
+    mentionAnalysis.value = await window.chatApi.getMentionAnalysis(props.sessionId, props.timeFilter)
+  } catch (error) {
+    console.error('加载 @ 互动分析失败:', error)
+  } finally {
+    isLoadingMention.value = false
+  }
+}
+
+const mentionerRankData = computed<RankItem[]>(() => {
+  if (!mentionAnalysis.value) return []
+  return mentionAnalysis.value.topMentioners.map((m) => ({
+    id: m.memberId.toString(),
+    name: m.name,
+    value: m.count,
+    percentage: m.percentage,
+  }))
+})
+
+const mentionedRankData = computed<RankItem[]>(() => {
+  if (!mentionAnalysis.value) return []
+  return mentionAnalysis.value.topMentioned.map((m) => ({
+    id: m.memberId.toString(),
+    name: m.name,
+    value: m.count,
+    percentage: m.percentage,
+  }))
+})
+
+function openMemberDetail(memberId: number) {
+  if (!mentionAnalysis.value) return
+  const detail = mentionAnalysis.value.memberDetails.find((d) => d.memberId === memberId)
+  if (detail) {
+    selectedMemberDetail.value = detail
+    showMemberDetailModal.value = true
+  }
+}
+
 // ==================== 昵称变更记录 ====================
 interface MemberWithHistory {
   memberId: number
@@ -225,6 +274,7 @@ watch(
     loadMonologueAnalysis()
     loadRepeatAnalysis()
     loadCatchphraseAnalysis()
+    loadMentionAnalysis()
   },
   { immediate: true, deep: true }
 )
@@ -253,7 +303,7 @@ watch(
         <!-- 最高纪录卡片 -->
         <div
           v-if="monologueAnalysis.maxComboRecord"
-          class="mx-5 mt-4 rounded-lg bg-gradient-to-r from-amber-50 to-orange-50 p-4 dark:from-amber-900/20 dark:to-orange-900/20"
+          class="mx-5 mt-4 rounded-lg bg-linear-to-r from-amber-50 to-orange-50 p-4 dark:from-amber-900/20 dark:to-orange-900/20"
         >
           <div class="flex items-center gap-2">
             <span class="text-2xl">🏆</span>
@@ -286,11 +336,11 @@ watch(
               class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold"
               :class="
                 index === 0
-                  ? 'bg-gradient-to-r from-amber-400 to-orange-500 text-white'
+                  ? 'bg-linear-to-r from-amber-400 to-orange-500 text-white'
                   : index === 1
-                    ? 'bg-gradient-to-r from-gray-300 to-gray-400 text-white'
+                    ? 'bg-linear-to-r from-gray-300 to-gray-400 text-white'
                     : index === 2
-                      ? 'bg-gradient-to-r from-amber-600 to-amber-700 text-white'
+                      ? 'bg-linear-to-r from-amber-600 to-amber-700 text-white'
                       : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
               "
             >
@@ -396,7 +446,7 @@ watch(
               <div class="flex items-center gap-1.5 rounded-lg bg-gray-50 px-3 py-1.5 dark:bg-gray-800">
                 <span
                   class="text-sm"
-                  :class="item.endTs === null ? 'font-semibold text-[#de335e]' : 'text-gray-700 dark:text-gray-300'"
+                  :class="item.endTs === null ? 'font-semibold text-pink-600' : 'text-gray-700 dark:text-gray-300'"
                 >
                   {{ item.name }}
                 </span>
@@ -490,7 +540,7 @@ watch(
                 >
                   {{ index + 1 }}
                 </span>
-                <span class="shrink-0 text-lg font-bold text-[#de335e]">{{ item.maxChainLength }}人</span>
+                <span class="shrink-0 text-lg font-bold text-pink-600">{{ item.maxChainLength }}人</span>
                 <div class="flex flex-1 items-center gap-1 overflow-hidden text-sm">
                   <span class="shrink-0 font-medium text-gray-900 dark:text-white">{{ item.originatorName }}：</span>
                   <span class="truncate text-gray-600 dark:text-gray-400" :title="item.content">
@@ -585,5 +635,205 @@ watch(
     <SectionCard v-else title="💬 口头禅分析">
       <EmptyState text="暂无口头禅数据" />
     </SectionCard>
+
+    <!-- @ 互动分析模块 -->
+    <LoadingState v-if="isLoadingMention" text="正在分析 @ 互动数据..." />
+
+    <template v-else-if="mentionAnalysis && mentionAnalysis.totalMentions > 0">
+      <!-- @ 排行榜 -->
+      <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <RankListPro
+          v-if="mentionerRankData.length > 0"
+          :members="mentionerRankData"
+          title="📢 谁最喜欢 @ 别人"
+          :description="`共 ${mentionAnalysis.totalMentions} 次 @`"
+          unit="次"
+        />
+
+        <RankListPro
+          v-if="mentionedRankData.length > 0"
+          :members="mentionedRankData"
+          title="🎯 谁最常被 @"
+          description="群里的人气王"
+          unit="次"
+        />
+      </div>
+
+      <!-- 单向关注（舔狗检测） -->
+      <SectionCard
+        v-if="mentionAnalysis.oneWay.length > 0"
+        title="🐕 单向关注检测"
+        :description="`发现 ${mentionAnalysis.oneWay.length} 对单向关注关系（一方 @ 另一方占比 ≥80%）`"
+      >
+        <div class="divide-y divide-gray-100 dark:divide-gray-800">
+          <div
+            v-for="(pair, index) in mentionAnalysis.oneWay.slice(0, 10)"
+            :key="index"
+            class="flex items-center gap-4 px-5 py-3 transition-colors hover:bg-gray-50 dark:hover:bg-gray-800/50"
+          >
+            <!-- 排名 -->
+            <span
+              class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold"
+              :class="
+                index === 0
+                  ? 'bg-pink-100 text-pink-600 dark:bg-pink-900/30 dark:text-pink-400'
+                  : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-500'
+              "
+            >
+              {{ index + 1 }}
+            </span>
+
+            <!-- 关系展示 -->
+            <div class="flex flex-1 items-center gap-2">
+              <button
+                class="font-medium text-gray-900 hover:text-pink-600 dark:text-white dark:hover:text-pink-600"
+                @click="openMemberDetail(pair.fromMemberId)"
+              >
+                {{ pair.fromName }}
+              </button>
+              <div class="flex items-center gap-1 text-pink-500">
+                <span class="text-lg">→</span>
+                <span class="text-xs">{{ pair.fromToCount }}次</span>
+              </div>
+              <button
+                class="font-medium text-gray-900 hover:text-pink-600 dark:text-white dark:hover:text-pink-600"
+                @click="openMemberDetail(pair.toMemberId)"
+              >
+                {{ pair.toName }}
+              </button>
+            </div>
+
+            <!-- 反向数据 -->
+            <div class="shrink-0 text-right text-sm text-gray-500">
+              <span v-if="pair.toFromCount === 0" class="text-red-500">从不回应</span>
+              <span v-else>反向 {{ pair.toFromCount }} 次</span>
+            </div>
+
+            <!-- 单向比例标签 -->
+            <UBadge color="pink" variant="soft" size="xs">{{ Math.round(pair.ratio * 100) }}% 单向</UBadge>
+          </div>
+        </div>
+      </SectionCard>
+
+      <!-- 双向奔赴（CP检测） -->
+      <SectionCard
+        v-if="mentionAnalysis.twoWay.length > 0"
+        title="💕 双向奔赴检测"
+        :description="`发现 ${mentionAnalysis.twoWay.length} 对互动频繁的 CP（互相 @ 且平衡度 ≥30%）`"
+      >
+        <div class="divide-y divide-gray-100 dark:divide-gray-800">
+          <div
+            v-for="(pair, index) in mentionAnalysis.twoWay.slice(0, 10)"
+            :key="index"
+            class="flex items-center gap-4 px-5 py-3 transition-colors hover:bg-gray-50 dark:hover:bg-gray-800/50"
+          >
+            <!-- 排名 -->
+            <span
+              class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold"
+              :class="
+                index === 0
+                  ? 'bg-linear-to-r from-pink-400 to-red-400 text-white'
+                  : index === 1
+                    ? 'bg-linear-to-r from-pink-300 to-red-300 text-white'
+                    : index === 2
+                      ? 'bg-linear-to-r from-pink-200 to-red-200 text-pink-700'
+                      : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-500'
+              "
+            >
+              {{ index + 1 }}
+            </span>
+
+            <!-- CP 关系展示 -->
+            <div class="flex flex-1 items-center gap-2">
+              <button
+                class="font-medium text-gray-900 hover:text-pink-600 dark:text-white dark:hover:text-pink-600"
+                @click="openMemberDetail(pair.member1Id)"
+              >
+                {{ pair.member1Name }}
+              </button>
+              <div class="flex items-center gap-1">
+                <span class="text-xs text-gray-400">{{ pair.member1To2 }}</span>
+                <span class="text-lg text-pink-500">⇄</span>
+                <span class="text-xs text-gray-400">{{ pair.member2To1 }}</span>
+              </div>
+              <button
+                class="font-medium text-gray-900 hover:text-pink-600 dark:text-white dark:hover:text-pink-600"
+                @click="openMemberDetail(pair.member2Id)"
+              >
+                {{ pair.member2Name }}
+              </button>
+            </div>
+
+            <!-- 总互动次数 -->
+            <div class="shrink-0 text-right">
+              <span class="text-lg font-bold text-pink-600">{{ pair.total }}</span>
+              <span class="ml-1 text-sm text-gray-500">次互动</span>
+            </div>
+
+            <!-- 平衡度标签 -->
+            <UBadge
+              :color="pair.balance >= 0.7 ? 'green' : pair.balance >= 0.5 ? 'blue' : 'gray'"
+              variant="soft"
+              size="xs"
+            >
+              {{ Math.round(pair.balance * 100) }}% 平衡
+            </UBadge>
+          </div>
+        </div>
+      </SectionCard>
+    </template>
+
+    <SectionCard v-else-if="!isLoadingMention" title="📱 @ 互动分析">
+      <EmptyState text="暂无 @ 互动数据" />
+    </SectionCard>
+
+    <!-- 成员 @ 详情弹窗 -->
+    <UModal v-model:open="showMemberDetailModal">
+      <template #content>
+        <div v-if="selectedMemberDetail" class="p-5">
+          <h3 class="mb-4 text-lg font-semibold text-gray-900 dark:text-white">
+            {{ selectedMemberDetail.name }} 的 @ 关系
+          </h3>
+
+          <!-- 该成员最常 @ 的人 -->
+          <div v-if="selectedMemberDetail.topMentioned.length > 0" class="mb-4">
+            <h4 class="mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">最常 @ 的人</h4>
+            <div class="space-y-2">
+              <div
+                v-for="(item, index) in selectedMemberDetail.topMentioned"
+                :key="index"
+                class="flex items-center gap-3 rounded-lg bg-gray-50 px-3 py-2 dark:bg-gray-800"
+              >
+                <span class="text-sm font-medium text-gray-900 dark:text-white">
+                  {{ item.toName }}
+                </span>
+                <span class="text-xs text-gray-500">{{ item.count }} 次</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 最常 @ 该成员的人 -->
+          <div v-if="selectedMemberDetail.topMentioners.length > 0">
+            <h4 class="mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">最常 @ TA 的人</h4>
+            <div class="space-y-2">
+              <div
+                v-for="(item, index) in selectedMemberDetail.topMentioners"
+                :key="index"
+                class="flex items-center gap-3 rounded-lg bg-gray-50 px-3 py-2 dark:bg-gray-800"
+              >
+                <span class="text-sm font-medium text-gray-900 dark:text-white">
+                  {{ item.fromName }}
+                </span>
+                <span class="text-xs text-gray-500">{{ item.count }} 次</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="mt-4 flex justify-end">
+            <UButton color="gray" variant="soft" @click="showMemberDetailModal = false">关闭</UButton>
+          </div>
+        </div>
+      </template>
+    </UModal>
   </div>
 </template>
