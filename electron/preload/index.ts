@@ -42,7 +42,14 @@ const api = {
     }
   },
   receive: (channel: string, func: (...args: unknown[]) => void) => {
-    const validChannels = ['show-message', 'chat:importProgress', 'merge:parseProgress', 'llm:streamChunk', 'agent:streamChunk', 'agent:complete']
+    const validChannels = [
+      'show-message',
+      'chat:importProgress',
+      'merge:parseProgress',
+      'llm:streamChunk',
+      'agent:streamChunk',
+      'agent:complete',
+    ]
     if (validChannels.includes(channel)) {
       // Deliberately strip event as it includes `sender`
       ipcRenderer.on(channel, (_event, ...args) => func(...args))
@@ -499,6 +506,20 @@ interface ToolContext {
   timeFilter?: { startTs: number; endTs: number }
 }
 
+// AI 服务配置类型（前端用）
+interface AIServiceConfigDisplay {
+  id: string
+  name: string
+  provider: string
+  apiKey: string // 脱敏后的 API Key
+  apiKeySet: boolean
+  model?: string
+  baseUrl?: string
+  maxTokens?: number
+  createdAt: number
+  updatedAt: number
+}
+
 const llmApi = {
   /**
    * 获取所有支持的 LLM 提供商
@@ -507,7 +528,85 @@ const llmApi = {
     return ipcRenderer.invoke('llm:getProviders')
   },
 
+  // ==================== 多配置管理 API ====================
+
   /**
+   * 获取所有配置列表
+   */
+  getAllConfigs: (): Promise<AIServiceConfigDisplay[]> => {
+    return ipcRenderer.invoke('llm:getAllConfigs')
+  },
+
+  /**
+   * 获取当前激活的配置 ID
+   */
+  getActiveConfigId: (): Promise<string | null> => {
+    return ipcRenderer.invoke('llm:getActiveConfigId')
+  },
+
+  /**
+   * 添加新配置
+   */
+  addConfig: (config: {
+    name: string
+    provider: string
+    apiKey: string
+    model?: string
+    baseUrl?: string
+    maxTokens?: number
+  }): Promise<{ success: boolean; config?: AIServiceConfigDisplay; error?: string }> => {
+    return ipcRenderer.invoke('llm:addConfig', config)
+  },
+
+  /**
+   * 更新配置
+   */
+  updateConfig: (
+    id: string,
+    updates: {
+      name?: string
+      provider?: string
+      apiKey?: string
+      model?: string
+      baseUrl?: string
+      maxTokens?: number
+    }
+  ): Promise<{ success: boolean; error?: string }> => {
+    return ipcRenderer.invoke('llm:updateConfig', id, updates)
+  },
+
+  /**
+   * 删除配置
+   */
+  deleteConfig: (id?: string): Promise<{ success: boolean; error?: string }> => {
+    return ipcRenderer.invoke('llm:deleteConfig', id)
+  },
+
+  /**
+   * 设置激活的配置
+   */
+  setActiveConfig: (id: string): Promise<{ success: boolean; error?: string }> => {
+    return ipcRenderer.invoke('llm:setActiveConfig', id)
+  },
+
+  /**
+   * 验证 API Key（支持自定义 baseUrl）
+   */
+  validateApiKey: (provider: string, apiKey: string, baseUrl?: string): Promise<boolean> => {
+    return ipcRenderer.invoke('llm:validateApiKey', provider, apiKey, baseUrl)
+  },
+
+  /**
+   * 检查是否已配置 LLM（是否有激活的配置）
+   */
+  hasConfig: (): Promise<boolean> => {
+    return ipcRenderer.invoke('llm:hasConfig')
+  },
+
+  // ==================== 兼容旧 API（deprecated）====================
+
+  /**
+   * @deprecated 使用 getAllConfigs 代替
    * 获取当前 LLM 配置
    */
   getConfig: (): Promise<LLMConfig | null> => {
@@ -515,42 +614,26 @@ const llmApi = {
   },
 
   /**
+   * @deprecated 使用 addConfig 或 updateConfig 代替
    * 保存 LLM 配置
    */
   saveConfig: (config: {
     provider: string
     apiKey: string
     model?: string
+    baseUrl?: string
     maxTokens?: number
   }): Promise<{ success: boolean; error?: string }> => {
     return ipcRenderer.invoke('llm:saveConfig', config)
   },
 
   /**
-   * 删除 LLM 配置
-   */
-  deleteConfig: (): Promise<boolean> => {
-    return ipcRenderer.invoke('llm:deleteConfig')
-  },
-
-  /**
-   * 验证 API Key
-   */
-  validateApiKey: (provider: string, apiKey: string): Promise<boolean> => {
-    return ipcRenderer.invoke('llm:validateApiKey', provider, apiKey)
-  },
-
-  /**
-   * 检查是否已配置 LLM
-   */
-  hasConfig: (): Promise<boolean> => {
-    return ipcRenderer.invoke('llm:hasConfig')
-  },
-
-  /**
    * 发送 LLM 聊天请求（非流式）
    */
-  chat: (messages: ChatMessage[], options?: ChatOptions): Promise<{ success: boolean; content?: string; error?: string }> => {
+  chat: (
+    messages: ChatMessage[],
+    options?: ChatOptions
+  ): Promise<{ success: boolean; content?: string; error?: string }> => {
     return ipcRenderer.invoke('llm:chat', messages, options)
   },
 
@@ -597,18 +680,21 @@ const llmApi = {
       ipcRenderer.on('llm:streamChunk', handler)
 
       // 发起请求
-      ipcRenderer.invoke('llm:chatStream', requestId, messages, options).then((result) => {
-        console.log('[preload] chatStream invoke 返回:', result)
-        if (!result.success) {
+      ipcRenderer
+        .invoke('llm:chatStream', requestId, messages, options)
+        .then((result) => {
+          console.log('[preload] chatStream invoke 返回:', result)
+          if (!result.success) {
+            ipcRenderer.removeListener('llm:streamChunk', handler)
+            resolve(result)
+          }
+          // 如果 success，等待流完成（由 handler 处理 resolve）
+        })
+        .catch((error) => {
+          console.error('[preload] chatStream invoke 错误:', error)
           ipcRenderer.removeListener('llm:streamChunk', handler)
-          resolve(result)
-        }
-        // 如果 success，等待流完成（由 handler 处理 resolve）
-      }).catch((error) => {
-        console.error('[preload] chatStream invoke 错误:', error)
-        ipcRenderer.removeListener('llm:streamChunk', handler)
-        resolve({ success: false, error: String(error) })
-      })
+          resolve({ success: false, error: String(error) })
+        })
     })
   },
 }
@@ -641,10 +727,7 @@ const agentApi = {
       }
 
       // 监听完成事件
-      const completeHandler = (
-        _event: Electron.IpcRendererEvent,
-        data: { requestId: string; result: AgentResult }
-      ) => {
+      const completeHandler = (_event: Electron.IpcRendererEvent, data: { requestId: string; result: AgentResult }) => {
         if (data.requestId === requestId) {
           console.log('[preload] Agent 完成，requestId:', requestId)
           ipcRenderer.removeListener('agent:streamChunk', chunkHandler)
@@ -657,20 +740,23 @@ const agentApi = {
       ipcRenderer.on('agent:complete', completeHandler)
 
       // 发起请求
-      ipcRenderer.invoke('agent:runStream', requestId, userMessage, context).then((result) => {
-        console.log('[preload] Agent invoke 返回:', result)
-        if (!result.success) {
+      ipcRenderer
+        .invoke('agent:runStream', requestId, userMessage, context)
+        .then((result) => {
+          console.log('[preload] Agent invoke 返回:', result)
+          if (!result.success) {
+            ipcRenderer.removeListener('agent:streamChunk', chunkHandler)
+            ipcRenderer.removeListener('agent:complete', completeHandler)
+            resolve(result)
+          }
+          // 如果 success，等待完成（由 completeHandler 处理 resolve）
+        })
+        .catch((error) => {
+          console.error('[preload] Agent invoke 错误:', error)
           ipcRenderer.removeListener('agent:streamChunk', chunkHandler)
           ipcRenderer.removeListener('agent:complete', completeHandler)
-          resolve(result)
-        }
-        // 如果 success，等待完成（由 completeHandler 处理 resolve）
-      }).catch((error) => {
-        console.error('[preload] Agent invoke 错误:', error)
-        ipcRenderer.removeListener('agent:streamChunk', chunkHandler)
-        ipcRenderer.removeListener('agent:complete', completeHandler)
-        resolve({ success: false, error: String(error) })
-      })
+          resolve({ success: false, error: String(error) })
+        })
     })
   },
 }

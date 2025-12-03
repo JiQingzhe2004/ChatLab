@@ -227,6 +227,28 @@ export const useChatStore = defineStore(
     // 设置弹窗状态
     const showSettingModal = ref(false)
 
+    // AI 配置更新计数器（用于触发其他组件刷新）
+    const aiConfigVersion = ref(0)
+
+    function notifyAIConfigChanged() {
+      aiConfigVersion.value++
+    }
+
+    // AI 全局设置
+    interface AIGlobalSettings {
+      /** 每次发送给 AI 的最大消息条数 */
+      maxMessagesPerRequest: number
+    }
+
+    const aiGlobalSettings = ref<AIGlobalSettings>({
+      maxMessagesPerRequest: 200,
+    })
+
+    function updateAIGlobalSettings(settings: Partial<AIGlobalSettings>) {
+      aiGlobalSettings.value = { ...aiGlobalSettings.value, ...settings }
+      notifyAIConfigChanged()
+    }
+
     // ==================== 自定义关键词模板 ====================
     const customKeywordTemplates = ref<KeywordTemplate[]>([])
 
@@ -269,6 +291,8 @@ export const useChatStore = defineStore(
       isInitialized,
       isSidebarCollapsed,
       showSettingModal,
+      aiConfigVersion,
+      aiGlobalSettings,
       customKeywordTemplates,
       deletedPresetTemplateIds,
       // Computed
@@ -282,6 +306,8 @@ export const useChatStore = defineStore(
       renameSession,
       clearSelection,
       toggleSidebar,
+      notifyAIConfigChanged,
+      updateAIGlobalSettings,
       addCustomKeywordTemplate,
       updateCustomKeywordTemplate,
       removeCustomKeywordTemplate,
@@ -296,8 +322,8 @@ export const useChatStore = defineStore(
         storage: sessionStorage,
       },
       {
-        // 自定义模板：localStorage（持久保存）
-        pick: ['customKeywordTemplates', 'deletedPresetTemplateIds'],
+        // 自定义模板和 AI 全局设置：localStorage（持久保存）
+        pick: ['customKeywordTemplates', 'deletedPresetTemplateIds', 'aiGlobalSettings'],
         storage: localStorage,
       },
     ],

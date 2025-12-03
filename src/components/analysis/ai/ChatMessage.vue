@@ -66,10 +66,7 @@ const renderedContent = computed(() => {
         />
 
         <!-- 流式输出光标 -->
-        <span
-          v-if="isStreaming"
-          class="ml-1 inline-block h-4 w-1.5 animate-pulse rounded-sm bg-violet-500"
-        />
+        <span v-if="isStreaming" class="ml-1 inline-block h-4 w-1.5 animate-pulse rounded-sm bg-violet-500" />
       </div>
 
       <!-- 时间戳 -->
@@ -285,4 +282,3 @@ const renderedContent = computed(() => {
   color: rgba(255, 255, 255, 0.8);
 }
 </style>
-

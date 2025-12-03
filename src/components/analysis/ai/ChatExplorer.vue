@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
+import { useChatStore } from '@/stores/chat'
 import ConversationList from './ConversationList.vue'
 import DataSourcePanel from './DataSourcePanel.vue'
 import ChatMessage from './ChatMessage.vue'
 import ChatInput from './ChatInput.vue'
-import AIConfigModal from './AIConfigModal.vue'
 import { useAIChat } from '@/composables/useAIChat'
 
 // Props
@@ -32,8 +32,10 @@ const {
   stopGeneration,
 } = useAIChat(props.sessionId, props.timeFilter)
 
+// Store
+const chatStore = useChatStore()
+
 // UI 状态
-const showConfigModal = ref(false)
 const isSourcePanelCollapsed = ref(false)
 const hasLLMConfig = ref(false)
 const isCheckingConfig = ref(true)
@@ -53,11 +55,12 @@ async function checkLLMConfig() {
   }
 }
 
-// 配置保存后的回调
-async function handleConfigSaved() {
-  hasLLMConfig.value = true
-  await updateMaxMessages()
-
+// 刷新配置状态（供外部调用）
+async function refreshConfig() {
+  await checkLLMConfig()
+  if (hasLLMConfig.value) {
+    await updateMaxMessages()
+  }
   // 更新欢迎消息
   const welcomeMsg = messages.value.find((m) => m.id.startsWith('welcome'))
   if (welcomeMsg) {
@@ -65,11 +68,16 @@ async function handleConfigSaved() {
   }
 }
 
+// 暴露方法供父组件调用
+defineExpose({
+  refreshConfig,
+})
+
 // 生成欢迎消息
 function generateWelcomeMessage() {
   const configHint = hasLLMConfig.value
     ? '✅ AI 服务已配置，可以开始对话了！'
-    : '**注意**：使用前请先点击右上角「配置」按钮配置 AI 服务 👆'
+    : '**注意**：使用前请先在侧边栏底部的「设置」中配置 AI 服务 ⚙️'
 
   return `👋 你好！我是 AI 助手，可以帮你探索「${props.sessionName}」的聊天记录。
 
@@ -128,18 +136,6 @@ function handleDeleteConversation(convId: string) {
   }
 }
 
-// 工具名称映射
-const TOOL_DISPLAY_NAMES: Record<string, string> = {
-  search_messages: '搜索聊天记录',
-  get_recent_messages: '获取最近消息',
-  get_member_stats: '获取成员统计',
-  get_time_stats: '获取时间分布',
-}
-
-function getToolDisplayName(toolName: string): string {
-  return TOOL_DISPLAY_NAMES[toolName] || toolName
-}
-
 // 格式化时间戳
 function formatTimestamp(ts: number): string {
   const date = new Date(ts * 1000)
@@ -178,6 +174,14 @@ watch(
   () => messages.value[messages.value.length - 1]?.content,
   () => {
     scrollToBottom()
+  }
+)
+
+// 监听全局 AI 配置变化（从设置弹窗保存时触发）
+watch(
+  () => (chatStore as unknown as { aiConfigVersion: number }).aiConfigVersion,
+  async () => {
+    await refreshConfig()
   }
 )
 </script>
@@ -425,16 +429,8 @@ watch(
                   :class="[hasLLMConfig ? 'text-gray-400' : 'text-amber-500 font-medium']"
                 >
                   <span class="h-1.5 w-1.5 rounded-full" :class="[hasLLMConfig ? 'bg-green-500' : 'bg-amber-500']" />
-                  {{ hasLLMConfig ? '服务已连接' : '未配置 AI 服务' }}
+                  {{ hasLLMConfig ? '服务已连接' : '请在全局设置中配置 AI 服务' }}
                 </div>
-
-                <button
-                  class="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
-                  @click="showConfigModal = true"
-                >
-                  <UIcon name="i-heroicons-cog-6-tooth" class="h-3.5 w-3.5" />
-                  <span>配置</span>
-                </button>
               </div>
             </div>
           </div>
@@ -459,9 +455,6 @@ watch(
         />
       </div>
     </Transition>
-
-    <!-- AI 配置弹窗 -->
-    <AIConfigModal v-model:open="showConfigModal" @saved="handleConfigSaved" />
   </div>
 </template>
 

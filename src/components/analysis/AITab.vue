@@ -19,6 +19,19 @@ const subTabs = [
 ]
 
 const activeSubTab = ref('chat-explorer')
+
+// ChatExplorer 组件引用
+const chatExplorerRef = ref<InstanceType<typeof ChatExplorer> | null>(null)
+
+// 刷新 AI 配置（供父组件调用）
+function refreshAIConfig() {
+  chatExplorerRef.value?.refreshConfig()
+}
+
+// 暴露方法供父组件调用
+defineExpose({
+  refreshAIConfig,
+})
 </script>
 
 <template>
@@ -32,6 +45,7 @@ const activeSubTab = ref('chat-explorer')
         <!-- 对话式探索 -->
         <ChatExplorer
           v-if="activeSubTab === 'chat-explorer'"
+          ref="chatExplorerRef"
           class="h-full"
           :session-id="sessionId"
           :session-name="sessionName"

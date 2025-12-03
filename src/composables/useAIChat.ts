@@ -221,7 +221,9 @@ export function useAIChat(sessionId: string, timeFilter?: { startTs: number; end
               // 更新用户消息中的工具调用状态
               const userMsg = messages.value[userMessageIndex]
               if (userMsg.toolCalls) {
-                const toolIndex = userMsg.toolCalls.findIndex((t) => t.name === chunk.toolName && t.status === 'running')
+                const toolIndex = userMsg.toolCalls.findIndex(
+                  (t) => t.name === chunk.toolName && t.status === 'running'
+                )
                 if (toolIndex >= 0) {
                   userMsg.toolCalls[toolIndex] = {
                     ...userMsg.toolCalls[toolIndex],
@@ -432,4 +434,3 @@ export function useAIChat(sessionId: string, timeFilter?: { startTs: number; end
     stopGeneration,
   }
 }
-

@@ -42,7 +42,7 @@ onMounted(async () => {
         </main>
       </template>
     </div>
-    <SettingModal v-model:open="chatStore.showSettingModal" />
+    <SettingModal v-model:open="chatStore.showSettingModal" @ai-config-saved="chatStore.notifyAIConfigChanged" />
   </UApp>
 </template>
 

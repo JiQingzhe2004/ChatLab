@@ -5,7 +5,7 @@
 /**
  * 支持的 LLM 提供商
  */
-export type LLMProvider = 'deepseek' | 'qwen'
+export type LLMProvider = 'deepseek' | 'qwen' | 'openai-compatible'
 
 /**
  * LLM 配置
@@ -167,3 +167,34 @@ export interface ProviderInfo {
   }>
 }
 
+// ==================== 多配置管理相关类型 ====================
+
+/**
+ * 单个 AI 服务配置
+ */
+export interface AIServiceConfig {
+  id: string // UUID
+  name: string // 用户自定义名称
+  provider: LLMProvider
+  apiKey: string // 可为空（本地 API 场景）
+  model?: string
+  baseUrl?: string // 自定义端点
+  maxTokens?: number
+  /** 禁用思考模式（用于本地服务，如 Qwen3、DeepSeek-R1 等） */
+  disableThinking?: boolean
+  createdAt: number // 创建时间戳
+  updatedAt: number // 更新时间戳
+}
+
+/**
+ * AI 配置存储结构
+ */
+export interface AIConfigStore {
+  configs: AIServiceConfig[]
+  activeConfigId: string | null
+}
+
+/**
+ * 最大配置数量限制
+ */
+export const MAX_CONFIG_COUNT = 10

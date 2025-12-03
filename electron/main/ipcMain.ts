@@ -735,7 +735,14 @@ const mainIpcMain = (win: BrowserWindow) => {
    */
   ipcMain.handle(
     'ai:searchMessages',
-    async (_, sessionId: string, keywords: string[], filter?: { startTs?: number; endTs?: number }, limit?: number, offset?: number) => {
+    async (
+      _,
+      sessionId: string,
+      keywords: string[],
+      filter?: { startTs?: number; endTs?: number },
+      limit?: number,
+      offset?: number
+    ) => {
       aiLogger.info('IPC', '收到搜索消息请求', {
         sessionId,
         keywords,
@@ -835,7 +842,14 @@ const mainIpcMain = (win: BrowserWindow) => {
    */
   ipcMain.handle(
     'ai:addMessage',
-    async (_, conversationId: string, role: 'user' | 'assistant', content: string, dataKeywords?: string[], dataMessageCount?: number) => {
+    async (
+      _,
+      conversationId: string,
+      role: 'user' | 'assistant',
+      content: string,
+      dataKeywords?: string[],
+      dataMessageCount?: number
+    ) => {
       try {
         return aiConversations.addMessage(conversationId, role, content, dataKeywords, dataMessageCount)
       } catch (error) {
@@ -869,7 +883,7 @@ const mainIpcMain = (win: BrowserWindow) => {
     }
   })
 
-  // ==================== LLM 服务 ====================
+  // ==================== LLM 服务（多配置管理）====================
 
   /**
    * 获取所有支持的 LLM 提供商
@@ -879,68 +893,135 @@ const mainIpcMain = (win: BrowserWindow) => {
   })
 
   /**
-   * 获取当前 LLM 配置
+   * 获取所有配置列表
    */
-  ipcMain.handle('llm:getConfig', async () => {
-    const config = llm.loadLLMConfig()
-    if (!config) return null
-    // 不返回完整的 API Key，只返回脱敏版本
-    return {
-      provider: config.provider,
-      apiKey: config.apiKey ? `${config.apiKey.slice(0, 8)}...${config.apiKey.slice(-4)}` : '',
-      apiKeySet: !!config.apiKey,
-      model: config.model,
-      maxTokens: config.maxTokens,
-    }
+  ipcMain.handle('llm:getAllConfigs', async () => {
+    const configs = llm.getAllConfigs()
+    // 脱敏 API Key
+    return configs.map((c) => ({
+      ...c,
+      apiKey: c.apiKey ? `${c.apiKey.slice(0, 4)}****${c.apiKey.slice(-4)}` : '',
+      apiKeySet: !!c.apiKey,
+    }))
   })
 
   /**
-   * 保存 LLM 配置
-   * 如果 apiKey 为空但已有配置，保留原有的 apiKey
+   * 获取当前激活的配置 ID
    */
-  ipcMain.handle('llm:saveConfig', async (_, config: { provider: llm.LLMProvider; apiKey: string; model?: string; maxTokens?: number }) => {
-    try {
-      // 如果没有提供新的 API Key，保留原有的
-      let apiKeyToSave = config.apiKey
-      if (!apiKeyToSave || apiKeyToSave.trim() === '') {
-        const existingConfig = llm.loadLLMConfig()
-        if (existingConfig?.apiKey) {
-          apiKeyToSave = existingConfig.apiKey
-        } else {
-          return { success: false, error: '请输入 API Key' }
-        }
-      }
+  ipcMain.handle('llm:getActiveConfigId', async () => {
+    const config = llm.getActiveConfig()
+    return config?.id || null
+  })
 
-      llm.saveLLMConfig({
-        ...config,
-        apiKey: apiKeyToSave,
-      })
-      return { success: true }
+  /**
+   * 添加新配置
+   */
+  ipcMain.handle(
+    'llm:addConfig',
+    async (
+      _,
+      config: {
+        name: string
+        provider: llm.LLMProvider
+        apiKey: string
+        model?: string
+        baseUrl?: string
+        maxTokens?: number
+      }
+    ) => {
+      try {
+        const result = llm.addConfig(config)
+        if (result.success && result.config) {
+          return {
+            success: true,
+            config: {
+              ...result.config,
+              apiKey: result.config.apiKey
+                ? `${result.config.apiKey.slice(0, 4)}****${result.config.apiKey.slice(-4)}`
+                : '',
+              apiKeySet: !!result.config.apiKey,
+            },
+          }
+        }
+        return result
+      } catch (error) {
+        console.error('添加 LLM 配置失败：', error)
+        return { success: false, error: String(error) }
+      }
+    }
+  )
+
+  /**
+   * 更新配置
+   */
+  ipcMain.handle(
+    'llm:updateConfig',
+    async (
+      _,
+      id: string,
+      updates: {
+        name?: string
+        provider?: llm.LLMProvider
+        apiKey?: string
+        model?: string
+        baseUrl?: string
+        maxTokens?: number
+      }
+    ) => {
+      try {
+        // 如果 apiKey 为空字符串，表示不更新 API Key
+        const cleanUpdates = { ...updates }
+        if (cleanUpdates.apiKey === '') {
+          delete cleanUpdates.apiKey
+        }
+
+        return llm.updateConfig(id, cleanUpdates)
+      } catch (error) {
+        console.error('更新 LLM 配置失败：', error)
+        return { success: false, error: String(error) }
+      }
+    }
+  )
+
+  /**
+   * 删除配置
+   */
+  ipcMain.handle('llm:deleteConfig', async (_, id?: string) => {
+    try {
+      // 兼容旧 API：如果没有传 id，删除当前激活的配置
+      if (!id) {
+        const activeConfig = llm.getActiveConfig()
+        if (activeConfig) {
+          return llm.deleteConfig(activeConfig.id)
+        }
+        return { success: false, error: '没有激活的配置' }
+      }
+      return llm.deleteConfig(id)
     } catch (error) {
-      console.error('保存 LLM 配置失败：', error)
+      console.error('删除 LLM 配置失败：', error)
       return { success: false, error: String(error) }
     }
   })
 
   /**
-   * 删除 LLM 配置
+   * 设置激活的配置
    */
-  ipcMain.handle('llm:deleteConfig', async () => {
+  ipcMain.handle('llm:setActiveConfig', async (_, id: string) => {
     try {
-      llm.deleteLLMConfig()
-      return true
+      return llm.setActiveConfig(id)
     } catch (error) {
-      console.error('删除 LLM 配置失败：', error)
-      return false
+      console.error('设置激活配置失败：', error)
+      return { success: false, error: String(error) }
     }
   })
 
   /**
-   * 验证 API Key
+   * 验证 API Key（支持自定义 baseUrl）
    */
-  ipcMain.handle('llm:validateApiKey', async (_, provider: llm.LLMProvider, apiKey: string) => {
+  ipcMain.handle('llm:validateApiKey', async (_, provider: llm.LLMProvider, apiKey: string, baseUrl?: string) => {
     try {
-      return await llm.validateApiKey(provider, apiKey)
+      const service = llm.createLLMService({ provider, apiKey, baseUrl })
+      return await service.validateApiKey()
     } catch (error) {
       console.error('验证 API Key 失败：', error)
       return false
@@ -948,11 +1029,68 @@ const mainIpcMain = (win: BrowserWindow) => {
   })
 
   /**
-   * 检查是否已配置 LLM
+   * 检查是否已配置 LLM（是否有激活的配置）
    */
   ipcMain.handle('llm:hasConfig', async () => {
-    return llm.hasLLMConfig()
+    return llm.hasActiveConfig()
   })
+
+  // ==================== 兼容旧 API（deprecated）====================
+
+  /**
+   * @deprecated 使用 llm:getAllConfigs 代替
+   * 获取当前 LLM 配置
+   */
+  ipcMain.handle('llm:getConfig', async () => {
+    const config = llm.getActiveConfig()
+    if (!config) return null
+    return {
+      provider: config.provider,
+      apiKey: config.apiKey ? `${config.apiKey.slice(0, 8)}...${config.apiKey.slice(-4)}` : '',
+      apiKeySet: !!config.apiKey,
+      model: config.model,
+      baseUrl: config.baseUrl,
+      maxTokens: config.maxTokens,
+    }
+  })
+
+  /**
+   * @deprecated 使用 llm:addConfig 或 llm:updateConfig 代替
+   * 保存 LLM 配置
+   */
+  ipcMain.handle(
+    'llm:saveConfig',
+    async (
+      _,
+      config: { provider: llm.LLMProvider; apiKey: string; model?: string; baseUrl?: string; maxTokens?: number }
+    ) => {
+      try {
+        const activeConfig = llm.getActiveConfig()
+
+        if (activeConfig) {
+          // 更新现有配置
+          const updates: Record<string, unknown> = { ...config }
+          if (!config.apiKey || config.apiKey.trim() === '') {
+            delete updates.apiKey
+          }
+          return llm.updateConfig(activeConfig.id, updates)
+        } else {
+          // 创建新配置
+          if (!config.apiKey || config.apiKey.trim() === '') {
+            return { success: false, error: '请输入 API Key' }
+          }
+          const providerInfo = llm.getProviderInfo(config.provider)
+          return llm.addConfig({
+            name: providerInfo?.name || config.provider,
+            ...config,
+          })
+        }
+      } catch (error) {
+        console.error('保存 LLM 配置失败：', error)
+        return { success: false, error: String(error) }
+      }
+    }
+  )
 
   /**
    * 发送 LLM 聊天请求（非流式）
@@ -979,51 +1117,54 @@ const mainIpcMain = (win: BrowserWindow) => {
    * 发送 LLM 聊天请求（流式）
    * 使用 IPC 事件发送流式数据
    */
-  ipcMain.handle('llm:chatStream', async (_, requestId: string, messages: llm.ChatMessage[], options?: llm.ChatOptions) => {
-    aiLogger.info('IPC', `收到流式聊天请求: ${requestId}`, {
-      messagesCount: messages.length,
-      options,
-    })
+  ipcMain.handle(
+    'llm:chatStream',
+    async (_, requestId: string, messages: llm.ChatMessage[], options?: llm.ChatOptions) => {
+      aiLogger.info('IPC', `收到流式聊天请求: ${requestId}`, {
+        messagesCount: messages.length,
+        options,
+      })
 
-    try {
-      const generator = llm.chatStream(messages, options)
-      aiLogger.info('IPC', `创建流式生成器: ${requestId}`)
+      try {
+        const generator = llm.chatStream(messages, options)
+        aiLogger.info('IPC', `创建流式生成器: ${requestId}`)
 
-      // 异步处理流式响应
-      ;(async () => {
-        let chunkIndex = 0
-        try {
-          aiLogger.info('IPC', `开始迭代流式响应: ${requestId}`)
-          for await (const chunk of generator) {
-            chunkIndex++
-            aiLogger.debug('IPC', `发送 chunk #${chunkIndex}: ${requestId}`, {
-              contentLength: chunk.content?.length,
-              isFinished: chunk.isFinished,
-              finishReason: chunk.finishReason,
+        // 异步处理流式响应
+        ;(async () => {
+          let chunkIndex = 0
+          try {
+            aiLogger.info('IPC', `开始迭代流式响应: ${requestId}`)
+            for await (const chunk of generator) {
+              chunkIndex++
+              aiLogger.debug('IPC', `发送 chunk #${chunkIndex}: ${requestId}`, {
+                contentLength: chunk.content?.length,
+                isFinished: chunk.isFinished,
+                finishReason: chunk.finishReason,
+              })
+              win.webContents.send('llm:streamChunk', { requestId, chunk })
+            }
+            aiLogger.info('IPC', `流式响应完成: ${requestId}`, { totalChunks: chunkIndex })
+          } catch (error) {
+            aiLogger.error('IPC', `流式响应出错: ${requestId}`, {
+              error: String(error),
+              chunkIndex,
             })
-            win.webContents.send('llm:streamChunk', { requestId, chunk })
+            win.webContents.send('llm:streamChunk', {
+              requestId,
+              chunk: { content: '', isFinished: true, finishReason: 'error' },
+              error: String(error),
+            })
           }
-          aiLogger.info('IPC', `流式响应完成: ${requestId}`, { totalChunks: chunkIndex })
-        } catch (error) {
-          aiLogger.error('IPC', `流式响应出错: ${requestId}`, {
-            error: String(error),
-            chunkIndex,
-          })
-          win.webContents.send('llm:streamChunk', {
-            requestId,
-            chunk: { content: '', isFinished: true, finishReason: 'error' },
-            error: String(error),
-          })
-        }
-      })()
+        })()
 
-      return { success: true }
-    } catch (error) {
-      aiLogger.error('IPC', `创建流式请求失败: ${requestId}`, { error: String(error) })
-      console.error('LLM 流式聊天失败：', error)
-      return { success: false, error: String(error) }
+        return { success: true }
+      } catch (error) {
+        aiLogger.error('IPC', `创建流式请求失败: ${requestId}`, { error: String(error) })
+        console.error('LLM 流式聊天失败：', error)
+        return { success: false, error: String(error) }
+      }
     }
-  })
+  )
 
   // ==================== AI Agent API ====================
 
@@ -1031,65 +1172,57 @@ const mainIpcMain = (win: BrowserWindow) => {
    * 执行 Agent 对话（流式）
    * Agent 会自动调用工具并返回最终结果
    */
-  ipcMain.handle(
-    'agent:runStream',
-    async (
-      _,
-      requestId: string,
-      userMessage: string,
-      context: ToolContext
-    ) => {
-      aiLogger.info('IPC', `收到 Agent 流式请求: ${requestId}`, {
-        userMessage: userMessage.slice(0, 100),
-        sessionId: context.sessionId,
-      })
+  ipcMain.handle('agent:runStream', async (_, requestId: string, userMessage: string, context: ToolContext) => {
+    aiLogger.info('IPC', `收到 Agent 流式请求: ${requestId}`, {
+      userMessage: userMessage.slice(0, 100),
+      sessionId: context.sessionId,
+    })
 
-      try {
-        const agent = new Agent(context)
+    try {
+      const agent = new Agent(context)
 
-        // 异步执行，通过事件发送流式数据
-        ;(async () => {
-          try {
-            const result = await agent.executeStream(userMessage, (chunk: AgentStreamChunk) => {
-              aiLogger.debug('IPC', `Agent chunk: ${requestId}`, {
-                type: chunk.type,
-                contentLength: chunk.content?.length,
-                toolName: chunk.toolName,
-              })
-              win.webContents.send('agent:streamChunk', { requestId, chunk })
+      // 异步执行，通过事件发送流式数据
+      ;(async () => {
+        try {
+          const result = await agent.executeStream(userMessage, (chunk: AgentStreamChunk) => {
+            aiLogger.debug('IPC', `Agent chunk: ${requestId}`, {
+              type: chunk.type,
+              contentLength: chunk.content?.length,
+              toolName: chunk.toolName,
             })
+            win.webContents.send('agent:streamChunk', { requestId, chunk })
+          })
 
-            // 发送完成信息
-            win.webContents.send('agent:complete', {
-              requestId,
-              result: {
-                content: result.content,
-                toolsUsed: result.toolsUsed,
-                toolRounds: result.toolRounds,
-              },
-            })
-
-            aiLogger.info('IPC', `Agent 执行完成: ${requestId}`, {
+          // 发送完成信息
+          win.webContents.send('agent:complete', {
+            requestId,
+            result: {
+              content: result.content,
               toolsUsed: result.toolsUsed,
               toolRounds: result.toolRounds,
-              contentLength: result.content.length,
-            })
-          } catch (error) {
-            aiLogger.error('IPC', `Agent 执行出错: ${requestId}`, { error: String(error) })
-            win.webContents.send('agent:streamChunk', {
-              requestId,
-              chunk: { type: 'error', error: String(error), isFinished: true },
-            })
-          }
-        })()
+            },
+          })
 
-        return { success: true }
-      } catch (error) {
-        aiLogger.error('IPC', `创建 Agent 请求失败: ${requestId}`, { error: String(error) })
-        return { success: false, error: String(error) }
-      }
+          aiLogger.info('IPC', `Agent 执行完成: ${requestId}`, {
+            toolsUsed: result.toolsUsed,
+            toolRounds: result.toolRounds,
+            contentLength: result.content.length,
+          })
+        } catch (error) {
+          aiLogger.error('IPC', `Agent 执行出错: ${requestId}`, { error: String(error) })
+          win.webContents.send('agent:streamChunk', {
+            requestId,
+            chunk: { type: 'error', error: String(error), isFinished: true },
+          })
+        }
+      })()
+
+      return { success: true }
+    } catch (error) {
+      aiLogger.error('IPC', `创建 Agent 请求失败: ${requestId}`, { error: String(error) })
+      return { success: false, error: String(error) }
     }
-  )
+  })
 }
 
 export default mainIpcMain

@@ -319,14 +319,6 @@ function getContextMenuItems(session: AnalysisSession) {
       <!-- 版本号 & 社交链接 -->
       <div v-if="!isCollapsed" class="flex items-center justify-center gap-2 py-1 text-xs text-gray-400">
         <span>v{{ version }}</span>
-        <span>·</span>
-        <a
-          href="https://github.com/hellodigua/ChatLab"
-          target="_blank"
-          class="hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
-        >
-          Github
-        </a>
       </div>
     </div>
   </div>

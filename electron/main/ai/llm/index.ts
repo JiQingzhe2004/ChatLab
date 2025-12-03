@@ -1,21 +1,34 @@
 /**
  * LLM 服务模块入口
- * 提供统一的 LLM 服务管理
+ * 提供统一的 LLM 服务管理（支持多配置）
  */
 
 import * as fs from 'fs'
 import * as path from 'path'
 import { app } from 'electron'
-import type { LLMConfig, LLMProvider, ILLMService, ProviderInfo, ChatMessage, ChatOptions, ChatStreamChunk } from './types'
+import { randomUUID } from 'crypto'
+import type {
+  LLMConfig,
+  LLMProvider,
+  ILLMService,
+  ProviderInfo,
+  ChatMessage,
+  ChatOptions,
+  ChatStreamChunk,
+  AIServiceConfig,
+  AIConfigStore,
+} from './types'
+import { MAX_CONFIG_COUNT } from './types'
 import { DeepSeekService, DEEPSEEK_INFO } from './deepseek'
 import { QwenService, QWEN_INFO } from './qwen'
+import { OpenAICompatibleService, OPENAI_COMPATIBLE_INFO } from './openai-compatible'
 import { aiLogger } from '../logger'
 
 // 导出类型
 export * from './types'
 
 // 所有支持的提供商信息
-export const PROVIDERS: ProviderInfo[] = [DEEPSEEK_INFO, QWEN_INFO]
+export const PROVIDERS: ProviderInfo[] = [DEEPSEEK_INFO, QWEN_INFO, OPENAI_COMPATIBLE_INFO]
 
 // 配置文件路径
 let CONFIG_PATH: string | null = null
@@ -33,10 +46,9 @@ function getConfigPath(): string {
   return CONFIG_PATH
 }
 
-/**
- * LLM 配置管理
- */
-export interface StoredConfig {
+// ==================== 旧配置格式（用于迁移）====================
+
+interface LegacyStoredConfig {
   provider: LLMProvider
   apiKey: string
   model?: string
@@ -44,9 +56,70 @@ export interface StoredConfig {
 }
 
 /**
- * 保存 LLM 配置
+ * 检测是否为旧格式配置
  */
-export function saveLLMConfig(config: StoredConfig): void {
+function isLegacyConfig(data: unknown): data is LegacyStoredConfig {
+  if (!data || typeof data !== 'object') return false
+  const obj = data as Record<string, unknown>
+  return 'provider' in obj && 'apiKey' in obj && !('configs' in obj)
+}
+
+/**
+ * 迁移旧配置到新格式
+ */
+function migrateLegacyConfig(legacy: LegacyStoredConfig): AIConfigStore {
+  const now = Date.now()
+  const newConfig: AIServiceConfig = {
+    id: randomUUID(),
+    name: getProviderInfo(legacy.provider)?.name || legacy.provider,
+    provider: legacy.provider,
+    apiKey: legacy.apiKey,
+    model: legacy.model,
+    maxTokens: legacy.maxTokens,
+    createdAt: now,
+    updatedAt: now,
+  }
+
+  return {
+    configs: [newConfig],
+    activeConfigId: newConfig.id,
+  }
+}
+
+// ==================== 多配置管理 ====================
+
+/**
+ * 加载配置存储（自动处理迁移）
+ */
+export function loadConfigStore(): AIConfigStore {
+  const configPath = getConfigPath()
+
+  if (!fs.existsSync(configPath)) {
+    return { configs: [], activeConfigId: null }
+  }
+
+  try {
+    const content = fs.readFileSync(configPath, 'utf-8')
+    const data = JSON.parse(content)
+
+    // 检查是否需要迁移
+    if (isLegacyConfig(data)) {
+      aiLogger.info('LLM', '检测到旧配置格式，执行迁移')
+      const migrated = migrateLegacyConfig(data)
+      saveConfigStore(migrated)
+      return migrated
+    }
+
+    return data as AIConfigStore
+  } catch {
+    return { configs: [], activeConfigId: null }
+  }
+}
+
+/**
+ * 保存配置存储
+ */
+export function saveConfigStore(store: AIConfigStore): void {
   const configPath = getConfigPath()
   const dir = path.dirname(configPath)
 
@@ -54,55 +127,204 @@ export function saveLLMConfig(config: StoredConfig): void {
     fs.mkdirSync(dir, { recursive: true })
   }
 
-  fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf-8')
+  fs.writeFileSync(configPath, JSON.stringify(store, null, 2), 'utf-8')
 }
 
 /**
- * 加载 LLM 配置
+ * 获取所有配置列表
  */
-export function loadLLMConfig(): StoredConfig | null {
-  const configPath = getConfigPath()
+export function getAllConfigs(): AIServiceConfig[] {
+  return loadConfigStore().configs
+}
 
-  if (!fs.existsSync(configPath)) {
-    return null
+/**
+ * 获取当前激活的配置
+ */
+export function getActiveConfig(): AIServiceConfig | null {
+  const store = loadConfigStore()
+  if (!store.activeConfigId) return null
+  return store.configs.find((c) => c.id === store.activeConfigId) || null
+}
+
+/**
+ * 获取单个配置
+ */
+export function getConfigById(id: string): AIServiceConfig | null {
+  const store = loadConfigStore()
+  return store.configs.find((c) => c.id === id) || null
+}
+
+/**
+ * 添加新配置
+ */
+export function addConfig(config: Omit<AIServiceConfig, 'id' | 'createdAt' | 'updatedAt'>): {
+  success: boolean
+  config?: AIServiceConfig
+  error?: string
+} {
+  const store = loadConfigStore()
+
+  if (store.configs.length >= MAX_CONFIG_COUNT) {
+    return { success: false, error: `最多只能添加 ${MAX_CONFIG_COUNT} 个配置` }
   }
 
-  try {
-    const content = fs.readFileSync(configPath, 'utf-8')
-    return JSON.parse(content) as StoredConfig
-  } catch {
-    return null
+  const now = Date.now()
+  const newConfig: AIServiceConfig = {
+    ...config,
+    id: randomUUID(),
+    createdAt: now,
+    updatedAt: now,
+  }
+
+  store.configs.push(newConfig)
+
+  // 如果是第一个配置，自动设为激活
+  if (store.configs.length === 1) {
+    store.activeConfigId = newConfig.id
+  }
+
+  saveConfigStore(store)
+  return { success: true, config: newConfig }
+}
+
+/**
+ * 更新配置
+ */
+export function updateConfig(
+  id: string,
+  updates: Partial<Omit<AIServiceConfig, 'id' | 'createdAt' | 'updatedAt'>>
+): { success: boolean; error?: string } {
+  const store = loadConfigStore()
+  const index = store.configs.findIndex((c) => c.id === id)
+
+  if (index === -1) {
+    return { success: false, error: '配置不存在' }
+  }
+
+  store.configs[index] = {
+    ...store.configs[index],
+    ...updates,
+    updatedAt: Date.now(),
+  }
+
+  saveConfigStore(store)
+  return { success: true }
+}
+
+/**
+ * 删除配置
+ */
+export function deleteConfig(id: string): { success: boolean; error?: string } {
+  const store = loadConfigStore()
+  const index = store.configs.findIndex((c) => c.id === id)
+
+  if (index === -1) {
+    return { success: false, error: '配置不存在' }
+  }
+
+  store.configs.splice(index, 1)
+
+  // 如果删除的是当前激活的配置，选择第一个作为新的激活配置
+  if (store.activeConfigId === id) {
+    store.activeConfigId = store.configs.length > 0 ? store.configs[0].id : null
+  }
+
+  saveConfigStore(store)
+  return { success: true }
+}
+
+/**
+ * 设置激活的配置
+ */
+export function setActiveConfig(id: string): { success: boolean; error?: string } {
+  const store = loadConfigStore()
+  const config = store.configs.find((c) => c.id === id)
+
+  if (!config) {
+    return { success: false, error: '配置不存在' }
+  }
+
+  store.activeConfigId = id
+  saveConfigStore(store)
+  return { success: true }
+}
+
+/**
+ * 检查是否有激活的配置
+ */
+export function hasActiveConfig(): boolean {
+  const config = getActiveConfig()
+  return config !== null
+}
+
+// ==================== 兼容旧 API（deprecated）====================
+
+/**
+ * @deprecated 使用 loadConfigStore 代替
+ */
+export function loadLLMConfig(): LegacyStoredConfig | null {
+  const activeConfig = getActiveConfig()
+  if (!activeConfig) return null
+  return {
+    provider: activeConfig.provider,
+    apiKey: activeConfig.apiKey,
+    model: activeConfig.model,
+    maxTokens: activeConfig.maxTokens,
   }
 }
 
 /**
- * 删除 LLM 配置
+ * @deprecated 使用 addConfig 或 updateConfig 代替
+ */
+export function saveLLMConfig(config: LegacyStoredConfig): void {
+  const store = loadConfigStore()
+
+  // 如果有激活配置，更新它；否则创建新的
+  if (store.activeConfigId) {
+    updateConfig(store.activeConfigId, config)
+  } else {
+    addConfig({
+      name: getProviderInfo(config.provider)?.name || config.provider,
+      ...config,
+    })
+  }
+}
+
+/**
+ * @deprecated 使用 deleteConfig 代替
  */
 export function deleteLLMConfig(): void {
-  const configPath = getConfigPath()
-
-  if (fs.existsSync(configPath)) {
-    fs.unlinkSync(configPath)
+  const store = loadConfigStore()
+  if (store.activeConfigId) {
+    deleteConfig(store.activeConfigId)
   }
 }
 
 /**
- * 检查是否已配置 LLM
+ * @deprecated 使用 hasActiveConfig 代替
  */
 export function hasLLMConfig(): boolean {
-  const config = loadLLMConfig()
-  return config !== null && !!config.apiKey
+  return hasActiveConfig()
+}
+
+/**
+ * 扩展的 LLM 配置（包含本地服务特有选项）
+ */
+interface ExtendedLLMConfig extends LLMConfig {
+  disableThinking?: boolean
 }
 
 /**
  * 创建 LLM 服务实例
  */
-export function createLLMService(config: LLMConfig): ILLMService {
+export function createLLMService(config: ExtendedLLMConfig): ILLMService {
   switch (config.provider) {
     case 'deepseek':
       return new DeepSeekService(config.apiKey, config.model, config.baseUrl)
     case 'qwen':
       return new QwenService(config.apiKey, config.model, config.baseUrl)
+    case 'openai-compatible':
+      return new OpenAICompatibleService(config.apiKey, config.model, config.baseUrl, config.disableThinking)
     default:
       throw new Error(`Unknown LLM provider: ${config.provider}`)
   }
@@ -112,16 +334,18 @@ export function createLLMService(config: LLMConfig): ILLMService {
  * 获取当前配置的 LLM 服务实例
  */
 export function getCurrentLLMService(): ILLMService | null {
-  const config = loadLLMConfig()
-  if (!config || !config.apiKey) {
+  const activeConfig = getActiveConfig()
+  if (!activeConfig) {
     return null
   }
 
   return createLLMService({
-    provider: config.provider,
-    apiKey: config.apiKey,
-    model: config.model,
-    maxTokens: config.maxTokens,
+    provider: activeConfig.provider,
+    apiKey: activeConfig.apiKey,
+    model: activeConfig.model,
+    baseUrl: activeConfig.baseUrl,
+    maxTokens: activeConfig.maxTokens,
+    disableThinking: activeConfig.disableThinking,
   })
 }
 
@@ -217,4 +441,3 @@ export async function* chatStream(messages: ChatMessage[], options?: ChatOptions
     throw error
   }
 }
-

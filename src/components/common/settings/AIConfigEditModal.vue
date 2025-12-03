@@ -1,0 +1,644 @@
+<script setup lang="ts">
+import { ref, computed, watch } from 'vue'
+
+// ============ 类型定义 ============
+
+interface AIServiceConfig {
+  id: string
+  name: string
+  provider: string
+  apiKey: string
+  apiKeySet: boolean
+  model?: string
+  baseUrl?: string
+  disableThinking?: boolean
+  createdAt: number
+  updatedAt: number
+}
+
+interface Provider {
+  id: string
+  name: string
+  description: string
+  defaultBaseUrl: string
+  models: Array<{ id: string; name: string; description?: string }>
+}
+
+// 三种配置类型
+type ConfigType = 'preset' | 'local' | 'openai-compatible'
+
+// ============ Props & Emits ============
+
+const props = defineProps<{
+  open: boolean
+  mode: 'add' | 'edit'
+  config: AIServiceConfig | null
+  providers: Provider[]
+}>()
+
+const emit = defineEmits<{
+  'update:open': [value: boolean]
+  saved: []
+}>()
+
+// ============ 状态 ============
+
+const configType = ref<ConfigType>('preset')
+const isValidating = ref(false)
+const isSaving = ref(false)
+const showAdvanced = ref(false)
+
+const formData = ref({
+  name: '',
+  provider: '',
+  apiKey: '',
+  model: '',
+  baseUrl: '',
+  disableThinking: true, // 默认禁用思考模式
+})
+
+const validationResult = ref<'idle' | 'valid' | 'invalid'>('idle')
+const validationMessage = ref('')
+
+// ============ 计算属性 ============
+
+// 预设服务商（排除 openai-compatible）
+const presetProviders = computed(() => {
+  return props.providers.filter((p) => p.id !== 'openai-compatible')
+})
+
+const currentProvider = computed(() => {
+  return props.providers.find((p) => p.id === formData.value.provider)
+})
+
+const modelOptions = computed(() => {
+  if (!currentProvider.value) return []
+  return currentProvider.value.models.map((m) => ({
+    label: m.name,
+    value: m.id,
+    description: m.description,
+  }))
+})
+
+const canSave = computed(() => {
+  const { name, provider, apiKey, baseUrl, model } = formData.value
+
+  if (props.mode === 'add') {
+    switch (configType.value) {
+      case 'preset':
+        // 预设服务：需要名称、提供商、API Key
+        return name.trim() && provider && apiKey.trim()
+      case 'local':
+        // 本地服务：需要名称、端点、模型名
+        return name.trim() && baseUrl.trim() && model.trim()
+      case 'openai-compatible':
+        // OpenAI 兼容：需要名称、端点、API Key、模型名
+        return name.trim() && baseUrl.trim() && apiKey.trim() && model.trim()
+    }
+  }
+
+  // 编辑模式
+  if (formData.value.provider === 'openai-compatible') {
+    if (configType.value === 'local') {
+      return name.trim() && baseUrl.trim() && model.trim()
+    }
+    return name.trim() && baseUrl.trim() && model.trim()
+  }
+  return name.trim() && provider
+})
+
+const modalTitle = computed(() => (props.mode === 'add' ? '添加新配置' : '编辑配置'))
+
+// ============ 方法 ============
+
+function resetForm() {
+  configType.value = 'preset'
+  showAdvanced.value = false
+  formData.value = {
+    name: '',
+    provider: presetProviders.value[0]?.id || '',
+    apiKey: '',
+    model: presetProviders.value[0]?.models[0]?.id || '',
+    baseUrl: '',
+    disableThinking: true, // 默认禁用思考模式
+  }
+  validationResult.value = 'idle'
+  validationMessage.value = ''
+}
+
+function initFromConfig(config: AIServiceConfig) {
+  // 判断配置类型
+  if (config.provider === 'openai-compatible') {
+    // 根据是否有 API Key 和 baseUrl 判断是本地还是 OpenAI 兼容
+    const isLocal = !config.apiKeySet || (config.baseUrl?.includes('localhost') ?? false)
+    configType.value = isLocal ? 'local' : 'openai-compatible'
+    showAdvanced.value = isLocal && !!config.apiKeySet
+  } else {
+    configType.value = 'preset'
+    showAdvanced.value = false
+  }
+
+  formData.value = {
+    name: config.name,
+    provider: config.provider,
+    apiKey: '',
+    model: config.model || '',
+    baseUrl: config.baseUrl || '',
+    disableThinking: config.disableThinking ?? true, // 默认禁用
+  }
+  validationResult.value = 'idle'
+  validationMessage.value = ''
+}
+
+function switchConfigType(type: ConfigType) {
+  configType.value = type
+  validationResult.value = 'idle'
+  validationMessage.value = ''
+  showAdvanced.value = false
+
+  switch (type) {
+    case 'preset':
+      formData.value.provider = presetProviders.value[0]?.id || ''
+      formData.value.model = presetProviders.value[0]?.models[0]?.id || ''
+      formData.value.baseUrl = ''
+      formData.value.apiKey = ''
+      break
+    case 'local':
+      formData.value.provider = 'openai-compatible'
+      formData.value.model = ''
+      formData.value.baseUrl = 'http://localhost:11434/v1'
+      formData.value.apiKey = ''
+      break
+    case 'openai-compatible':
+      formData.value.provider = 'openai-compatible'
+      formData.value.model = ''
+      formData.value.baseUrl = ''
+      formData.value.apiKey = ''
+      break
+  }
+}
+
+async function validateKey() {
+  const { provider, apiKey, baseUrl } = formData.value
+
+  // 本地服务可以不需要 API Key
+  if (configType.value === 'local') {
+    if (!baseUrl) return
+  } else {
+    if (!provider || !apiKey) {
+      validationResult.value = 'idle'
+      validationMessage.value = ''
+      return
+    }
+  }
+
+  isValidating.value = true
+  validationResult.value = 'idle'
+
+  try {
+    const testApiKey = apiKey || 'sk-no-key-required'
+    const isValid = await window.llmApi.validateApiKey(
+      provider || 'openai-compatible',
+      testApiKey,
+      baseUrl || undefined
+    )
+    validationResult.value = isValid ? 'valid' : 'invalid'
+    validationMessage.value = isValid ? '连接验证成功' : '连接验证失败，但仍可保存'
+  } catch (error) {
+    validationResult.value = 'invalid'
+    validationMessage.value = '验证失败：' + String(error)
+  } finally {
+    isValidating.value = false
+  }
+}
+
+async function saveConfig() {
+  if (!canSave.value) return
+
+  isSaving.value = true
+  try {
+    // 确定最终的 provider
+    const finalProvider = configType.value === 'preset' ? formData.value.provider : 'openai-compatible'
+
+    // 确定 API Key
+    let finalApiKey = formData.value.apiKey.trim()
+    if (!finalApiKey && configType.value === 'local') {
+      finalApiKey = 'sk-no-key-required'
+    }
+
+    if (props.mode === 'add') {
+      const result = await window.llmApi.addConfig({
+        name: formData.value.name.trim(),
+        provider: finalProvider,
+        apiKey: finalApiKey,
+        model: formData.value.model.trim() || undefined,
+        baseUrl: formData.value.baseUrl.trim() || undefined,
+        // 仅本地服务才传递 disableThinking
+        disableThinking: configType.value === 'local' ? formData.value.disableThinking : undefined,
+      })
+
+      if (result.success) {
+        emit('update:open', false)
+        emit('saved')
+      } else {
+        console.error('添加配置失败：', result.error)
+      }
+    } else {
+      const updates: Record<string, unknown> = {
+        name: formData.value.name.trim(),
+        provider: finalProvider,
+        model: formData.value.model.trim() || undefined,
+        baseUrl: formData.value.baseUrl.trim() || undefined,
+        // 仅本地服务才传递 disableThinking
+        disableThinking: configType.value === 'local' ? formData.value.disableThinking : undefined,
+      }
+
+      if (formData.value.apiKey.trim()) {
+        updates.apiKey = formData.value.apiKey.trim()
+      }
+
+      const result = await window.llmApi.updateConfig(props.config!.id, updates)
+
+      if (result.success) {
+        emit('update:open', false)
+        emit('saved')
+      } else {
+        console.error('更新配置失败：', result.error)
+      }
+    }
+  } catch (error) {
+    console.error('保存配置失败：', error)
+  } finally {
+    isSaving.value = false
+  }
+}
+
+function closeModal() {
+  emit('update:open', false)
+}
+
+// ============ 监听器 ============
+
+watch(
+  () => props.open,
+  (isOpen) => {
+    if (isOpen) {
+      if (props.mode === 'edit' && props.config) {
+        initFromConfig(props.config)
+      } else {
+        resetForm()
+      }
+    }
+  }
+)
+
+watch(
+  () => formData.value.provider,
+  (newProvider) => {
+    const provider = props.providers.find((p) => p.id === newProvider)
+    if (provider && provider.models.length > 0 && configType.value === 'preset') {
+      formData.value.model = provider.models[0].id
+    }
+    validationResult.value = 'idle'
+    validationMessage.value = ''
+  }
+)
+
+watch(
+  () => formData.value.apiKey,
+  () => {
+    validationResult.value = 'idle'
+    validationMessage.value = ''
+  }
+)
+</script>
+
+<template>
+  <UModal :open="open" @update:open="emit('update:open', $event)">
+    <template #content>
+      <div class="p-6">
+        <h3 class="mb-4 text-lg font-semibold text-gray-900 dark:text-white">{{ modalTitle }}</h3>
+
+        <!-- 配置类型选择（仅新增时显示）-->
+        <div v-if="mode === 'add'" class="mb-6">
+          <div class="grid grid-cols-3 gap-2">
+            <!-- 预设服务商 -->
+            <button
+              class="flex flex-col items-center gap-2 rounded-lg border-2 p-3 transition-colors"
+              :class="[
+                configType === 'preset'
+                  ? 'border-primary-500 bg-primary-50 dark:border-primary-400 dark:bg-primary-900/20'
+                  : 'border-gray-200 hover:border-gray-300 dark:border-gray-700 dark:hover:border-gray-600',
+              ]"
+              @click="switchConfigType('preset')"
+            >
+              <UIcon
+                name="i-heroicons-cloud"
+                class="h-5 w-5"
+                :class="[configType === 'preset' ? 'text-primary-500' : 'text-gray-400']"
+              />
+              <div class="text-center">
+                <p
+                  class="text-xs font-medium"
+                  :class="[
+                    configType === 'preset'
+                      ? 'text-primary-600 dark:text-primary-400'
+                      : 'text-gray-700 dark:text-gray-300',
+                  ]"
+                >
+                  云端服务
+                </p>
+                <p class="mt-0.5 text-[10px] text-gray-500">DeepSeek、Qwen</p>
+              </div>
+            </button>
+
+            <!-- 本地服务 -->
+            <button
+              class="flex flex-col items-center gap-2 rounded-lg border-2 p-3 transition-colors"
+              :class="[
+                configType === 'local'
+                  ? 'border-primary-500 bg-primary-50 dark:border-primary-400 dark:bg-primary-900/20'
+                  : 'border-gray-200 hover:border-gray-300 dark:border-gray-700 dark:hover:border-gray-600',
+              ]"
+              @click="switchConfigType('local')"
+            >
+              <UIcon
+                name="i-heroicons-server"
+                class="h-5 w-5"
+                :class="[configType === 'local' ? 'text-primary-500' : 'text-gray-400']"
+              />
+              <div class="text-center">
+                <p
+                  class="text-xs font-medium"
+                  :class="[
+                    configType === 'local'
+                      ? 'text-primary-600 dark:text-primary-400'
+                      : 'text-gray-700 dark:text-gray-300',
+                  ]"
+                >
+                  本地服务
+                </p>
+                <p class="mt-0.5 text-[10px] text-gray-500">Ollama 等</p>
+              </div>
+            </button>
+
+            <!-- OpenAI 兼容 -->
+            <button
+              class="flex flex-col items-center gap-2 rounded-lg border-2 p-3 transition-colors"
+              :class="[
+                configType === 'openai-compatible'
+                  ? 'border-primary-500 bg-primary-50 dark:border-primary-400 dark:bg-primary-900/20'
+                  : 'border-gray-200 hover:border-gray-300 dark:border-gray-700 dark:hover:border-gray-600',
+              ]"
+              @click="switchConfigType('openai-compatible')"
+            >
+              <UIcon
+                name="i-heroicons-globe-alt"
+                class="h-5 w-5"
+                :class="[configType === 'openai-compatible' ? 'text-primary-500' : 'text-gray-400']"
+              />
+              <div class="text-center">
+                <p
+                  class="text-xs font-medium"
+                  :class="[
+                    configType === 'openai-compatible'
+                      ? 'text-primary-600 dark:text-primary-400'
+                      : 'text-gray-700 dark:text-gray-300',
+                  ]"
+                >
+                  OpenAI 兼容
+                </p>
+                <p class="mt-0.5 text-[10px] text-gray-500">自定义端点</p>
+              </div>
+            </button>
+          </div>
+        </div>
+
+        <div class="space-y-4">
+          <!-- 配置名称 -->
+          <div>
+            <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">配置名称</label>
+            <UInput
+              v-model="formData.name"
+              :placeholder="
+                configType === 'preset'
+                  ? '如：DeepSeek 主力'
+                  : configType === 'local'
+                    ? '如：本地 Ollama'
+                    : '如：自建 API'
+              "
+            />
+          </div>
+
+          <!-- ========== 预设服务商配置 ========== -->
+          <template v-if="configType === 'preset'">
+            <!-- 服务商选择 -->
+            <div>
+              <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">AI 服务商</label>
+              <USelect
+                v-model="formData.provider"
+                :items="presetProviders.map((p) => ({ label: p.name, value: p.id }))"
+                placeholder="选择服务商"
+              />
+              <p v-if="currentProvider" class="mt-1 text-xs text-gray-500">
+                {{ currentProvider.description }}
+              </p>
+            </div>
+
+            <!-- API Key -->
+            <div>
+              <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">API Key</label>
+              <div class="flex gap-2">
+                <UInput
+                  v-model="formData.apiKey"
+                  type="password"
+                  :placeholder="mode === 'edit' ? '输入新的 API Key（留空保持原有）' : '输入你的 API Key'"
+                  class="flex-1"
+                />
+                <UButton
+                  :loading="isValidating"
+                  :disabled="!formData.apiKey"
+                  color="gray"
+                  variant="soft"
+                  @click="validateKey"
+                >
+                  验证
+                </UButton>
+              </div>
+              <!-- 验证结果 -->
+              <div v-if="validationMessage" class="mt-2">
+                <div
+                  v-if="validationResult === 'valid'"
+                  class="flex items-center gap-1 text-sm text-green-600 dark:text-green-400"
+                >
+                  <UIcon name="i-heroicons-check-circle" class="h-4 w-4" />
+                  {{ validationMessage }}
+                </div>
+                <div
+                  v-else-if="validationResult === 'invalid'"
+                  class="flex items-center gap-1 text-sm text-amber-600 dark:text-amber-400"
+                >
+                  <UIcon name="i-heroicons-exclamation-triangle" class="h-4 w-4" />
+                  {{ validationMessage }}
+                </div>
+              </div>
+            </div>
+
+            <!-- 模型选择 -->
+            <div>
+              <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">模型</label>
+              <USelect v-model="formData.model" :items="modelOptions" placeholder="选择模型" />
+            </div>
+          </template>
+
+          <!-- ========== 本地服务配置 ========== -->
+          <template v-else-if="configType === 'local'">
+            <!-- API 端点 -->
+            <div>
+              <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">API 端点</label>
+              <div class="flex gap-2">
+                <UInput v-model="formData.baseUrl" placeholder="http://localhost:11434/v1" class="flex-1" />
+                <UButton
+                  :loading="isValidating"
+                  :disabled="!formData.baseUrl"
+                  color="gray"
+                  variant="soft"
+                  @click="validateKey"
+                >
+                  测试
+                </UButton>
+              </div>
+              <p class="mt-1 text-xs text-gray-500">Ollama 默认：http://localhost:11434/v1</p>
+            </div>
+
+            <!-- 模型名称 -->
+            <div>
+              <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">模型名称</label>
+              <UInput v-model="formData.model" placeholder="如 llama3.2、qwen2.5、deepseek-r1" />
+              <p class="mt-1 text-xs text-gray-500">输入本地部署的模型名称</p>
+            </div>
+
+            <!-- 禁用思考模式 -->
+            <div class="flex items-center justify-between rounded-lg bg-gray-50 p-3 dark:bg-gray-800">
+              <div>
+                <p class="text-sm font-medium text-gray-700 dark:text-gray-300">禁用思考模式</p>
+                <p class="text-xs text-gray-500 dark:text-gray-400">
+                  针对 Qwen3、DeepSeek-R1 等模型，禁用后使用标准工具调用格式
+                </p>
+              </div>
+              <USwitch v-model="formData.disableThinking" />
+            </div>
+
+            <!-- 验证结果 -->
+            <div v-if="validationMessage">
+              <div
+                v-if="validationResult === 'valid'"
+                class="flex items-center gap-1 text-sm text-green-600 dark:text-green-400"
+              >
+                <UIcon name="i-heroicons-check-circle" class="h-4 w-4" />
+                {{ validationMessage }}
+              </div>
+              <div
+                v-else-if="validationResult === 'invalid'"
+                class="flex items-center gap-1 text-sm text-amber-600 dark:text-amber-400"
+              >
+                <UIcon name="i-heroicons-exclamation-triangle" class="h-4 w-4" />
+                {{ validationMessage }}
+              </div>
+            </div>
+
+            <!-- 高级选项（API Key） -->
+            <div>
+              <button
+                class="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                @click="showAdvanced = !showAdvanced"
+              >
+                <UIcon
+                  name="i-heroicons-chevron-right"
+                  class="h-4 w-4 transition-transform"
+                  :class="{ 'rotate-90': showAdvanced }"
+                />
+                高级选项
+              </button>
+
+              <div v-if="showAdvanced" class="mt-3 rounded-lg bg-gray-50 p-4 dark:bg-gray-800">
+                <div>
+                  <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    API Key
+                    <span class="font-normal text-gray-400">（可选）</span>
+                  </label>
+                  <UInput v-model="formData.apiKey" type="password" placeholder="本地服务通常不需要" />
+                  <p class="mt-1 text-xs text-gray-500">如果服务设置了认证，在此输入</p>
+                </div>
+              </div>
+            </div>
+          </template>
+
+          <!-- ========== OpenAI 兼容配置 ========== -->
+          <template v-else>
+            <!-- API 端点 -->
+            <div>
+              <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">API 端点</label>
+              <UInput v-model="formData.baseUrl" placeholder="https://api.example.com/v1" />
+              <p class="mt-1 text-xs text-gray-500">兼容 OpenAI 格式的 API 端点</p>
+            </div>
+
+            <!-- API Key -->
+            <div>
+              <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">API Key</label>
+              <div class="flex gap-2">
+                <UInput
+                  v-model="formData.apiKey"
+                  type="password"
+                  :placeholder="mode === 'edit' ? '输入新的 API Key（留空保持原有）' : '输入你的 API Key'"
+                  class="flex-1"
+                />
+                <UButton
+                  :loading="isValidating"
+                  :disabled="!formData.apiKey || !formData.baseUrl"
+                  color="gray"
+                  variant="soft"
+                  @click="validateKey"
+                >
+                  验证
+                </UButton>
+              </div>
+              <!-- 验证结果 -->
+              <div v-if="validationMessage" class="mt-2">
+                <div
+                  v-if="validationResult === 'valid'"
+                  class="flex items-center gap-1 text-sm text-green-600 dark:text-green-400"
+                >
+                  <UIcon name="i-heroicons-check-circle" class="h-4 w-4" />
+                  {{ validationMessage }}
+                </div>
+                <div
+                  v-else-if="validationResult === 'invalid'"
+                  class="flex items-center gap-1 text-sm text-amber-600 dark:text-amber-400"
+                >
+                  <UIcon name="i-heroicons-exclamation-triangle" class="h-4 w-4" />
+                  {{ validationMessage }}
+                </div>
+              </div>
+            </div>
+
+            <!-- 模型名称 -->
+            <div>
+              <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">模型名称</label>
+              <UInput v-model="formData.model" placeholder="如 gpt-4、claude-3" />
+              <p class="mt-1 text-xs text-gray-500">输入 API 支持的模型名称</p>
+            </div>
+          </template>
+        </div>
+
+        <!-- 底部按钮 -->
+        <div class="mt-6 flex justify-end gap-2">
+          <UButton color="gray" variant="soft" @click="closeModal">取消</UButton>
+          <UButton color="primary" :disabled="!canSave" :loading="isSaving" @click="saveConfig">
+            {{ mode === 'add' ? '添加' : '保存' }}
+          </UButton>
+        </div>
+      </div>
+    </template>
+  </UModal>
+</template>

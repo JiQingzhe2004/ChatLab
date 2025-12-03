@@ -143,11 +143,27 @@ interface LLMProviderInfo {
   models: Array<{ id: string; name: string; description?: string }>
 }
 
+// 单个 AI 服务配置（前端显示用，API Key 已脱敏）
+interface AIServiceConfigDisplay {
+  id: string
+  name: string
+  provider: string
+  apiKey: string // 脱敏后的 API Key
+  apiKeySet: boolean
+  model?: string
+  baseUrl?: string
+  maxTokens?: number
+  createdAt: number
+  updatedAt: number
+}
+
+// 兼容旧 API 的配置类型
 interface LLMConfig {
   provider: string
   apiKey: string
   apiKeySet: boolean
   model?: string
+  baseUrl?: string
   maxTokens?: number
 }
 
@@ -168,18 +184,55 @@ interface LLMChatStreamChunk {
 }
 
 interface LlmApi {
+  // 提供商
   getProviders: () => Promise<LLMProviderInfo[]>
+
+  // 多配置管理 API
+  getAllConfigs: () => Promise<AIServiceConfigDisplay[]>
+  getActiveConfigId: () => Promise<string | null>
+  addConfig: (config: {
+    name: string
+    provider: string
+    apiKey: string
+    model?: string
+    baseUrl?: string
+    maxTokens?: number
+  }) => Promise<{ success: boolean; config?: AIServiceConfigDisplay; error?: string }>
+  updateConfig: (
+    id: string,
+    updates: {
+      name?: string
+      provider?: string
+      apiKey?: string
+      model?: string
+      baseUrl?: string
+      maxTokens?: number
+    }
+  ) => Promise<{ success: boolean; error?: string }>
+  deleteConfig: (id?: string) => Promise<{ success: boolean; error?: string }>
+  setActiveConfig: (id: string) => Promise<{ success: boolean; error?: string }>
+
+  // 验证和检查
+  validateApiKey: (provider: string, apiKey: string, baseUrl?: string) => Promise<boolean>
+  hasConfig: () => Promise<boolean>
+
+  // 兼容旧 API（deprecated）
+  /** @deprecated 使用 getAllConfigs 代替 */
   getConfig: () => Promise<LLMConfig | null>
+  /** @deprecated 使用 addConfig 或 updateConfig 代替 */
   saveConfig: (config: {
     provider: string
     apiKey: string
     model?: string
+    baseUrl?: string
     maxTokens?: number
   }) => Promise<{ success: boolean; error?: string }>
-  deleteConfig: () => Promise<boolean>
-  validateApiKey: (provider: string, apiKey: string) => Promise<boolean>
-  hasConfig: () => Promise<boolean>
-  chat: (messages: LLMChatMessage[], options?: LLMChatOptions) => Promise<{ success: boolean; content?: string; error?: string }>
+
+  // 聊天功能
+  chat: (
+    messages: LLMChatMessage[],
+    options?: LLMChatOptions
+  ) => Promise<{ success: boolean; content?: string; error?: string }>
   chatStream: (
     messages: LLMChatMessage[],
     options?: LLMChatOptions,
@@ -229,4 +282,23 @@ declare global {
   }
 }
 
-export { ChatApi, Api, MergeApi, AiApi, LlmApi, AgentApi, SearchMessageResult, AIConversation, AIMessage, LLMProviderInfo, LLMConfig, LLMChatMessage, LLMChatOptions, LLMChatStreamChunk, AgentStreamChunk, AgentResult, ToolContext }
+export {
+  ChatApi,
+  Api,
+  MergeApi,
+  AiApi,
+  LlmApi,
+  AgentApi,
+  SearchMessageResult,
+  AIConversation,
+  AIMessage,
+  LLMProviderInfo,
+  LLMConfig,
+  AIServiceConfigDisplay,
+  LLMChatMessage,
+  LLMChatOptions,
+  LLMChatStreamChunk,
+  AgentStreamChunk,
+  AgentResult,
+  ToolContext,
+}

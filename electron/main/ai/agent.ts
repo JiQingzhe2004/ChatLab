@@ -8,6 +8,64 @@ import { chatStream, chat } from './llm'
 import { getAllToolDefinitions, executeToolCalls } from './tools'
 import type { ToolContext } from './tools/types'
 import { aiLogger } from './logger'
+import { randomUUID } from 'crypto'
+
+// ==================== Fallback 解析器 ====================
+
+/**
+ * 从文本内容中提取 <think> 标签内容
+ */
+function extractThinkingContent(content: string): { thinking: string; cleanContent: string } {
+  const thinkRegex = /<think>([\s\S]*?)<\/think>/gi
+  let thinking = ''
+  let cleanContent = content
+
+  const matches = content.matchAll(thinkRegex)
+  for (const match of matches) {
+    thinking += match[1].trim() + '\n'
+    cleanContent = cleanContent.replace(match[0], '')
+  }
+
+  return { thinking: thinking.trim(), cleanContent: cleanContent.trim() }
+}
+
+/**
+ * 从文本内容中解析 <tool_call> 标签并转换为标准 ToolCall 格式
+ */
+function parseToolCallTags(content: string): ToolCall[] | null {
+  const toolCallRegex = /<tool_call>\s*([\s\S]*?)\s*<\/tool_call>/gi
+  const toolCalls: ToolCall[] = []
+
+  const matches = content.matchAll(toolCallRegex)
+  for (const match of matches) {
+    try {
+      const jsonStr = match[1].trim()
+      const parsed = JSON.parse(jsonStr)
+
+      if (parsed.name && parsed.arguments) {
+        toolCalls.push({
+          id: `fallback-${randomUUID()}`,
+          type: 'function',
+          function: {
+            name: parsed.name,
+            arguments: typeof parsed.arguments === 'string' ? parsed.arguments : JSON.stringify(parsed.arguments),
+          },
+        })
+      }
+    } catch (e) {
+      aiLogger.warn('Agent', 'Failed to parse tool_call tag', { content: match[1], error: String(e) })
+    }
+  }
+
+  return toolCalls.length > 0 ? toolCalls : null
+}
+
+/**
+ * 检测内容是否包含工具调用标签（用于判断是否需要 fallback 解析）
+ */
+function hasToolCallTags(content: string): boolean {
+  return /<tool_call>/i.test(content)
+}
 
 /**
  * Agent 配置
@@ -138,21 +196,56 @@ export class Agent {
         contentLength: response.content?.length,
       })
 
-      // 如果是普通文本响应，完成
+      let toolCallsToProcess = response.tool_calls
+
+      // 如果没有标准 tool_calls，尝试 fallback 解析
       if (response.finishReason !== 'tool_calls' || !response.tool_calls) {
-        aiLogger.info('Agent', '执行完成', {
-          toolsUsed: this.toolsUsed,
-          toolRounds: this.toolRounds,
-        })
-        return {
-          content: response.content,
-          toolsUsed: this.toolsUsed,
-          toolRounds: this.toolRounds,
+        // Fallback: 检查内容中是否有 <tool_call> 标签
+        if (hasToolCallTags(response.content)) {
+          aiLogger.info('Agent', '检测到 <tool_call> 标签，执行 fallback 解析')
+
+          // 提取 thinking 内容
+          const { thinking, cleanContent } = extractThinkingContent(response.content)
+          if (thinking) {
+            aiLogger.info('Agent', '提取到 thinking 内容', { length: thinking.length })
+          }
+
+          // 解析 tool_call 标签
+          const fallbackToolCalls = parseToolCallTags(response.content)
+          if (fallbackToolCalls && fallbackToolCalls.length > 0) {
+            aiLogger.info('Agent', 'Fallback 解析成功', {
+              toolCount: fallbackToolCalls.length,
+              tools: fallbackToolCalls.map((tc) => tc.function.name),
+            })
+            toolCallsToProcess = fallbackToolCalls
+          } else {
+            // 解析失败，返回清理后的内容
+            aiLogger.info('Agent', '执行完成', {
+              toolsUsed: this.toolsUsed,
+              toolRounds: this.toolRounds,
+            })
+            return {
+              content: cleanContent,
+              toolsUsed: this.toolsUsed,
+              toolRounds: this.toolRounds,
+            }
+          }
+        } else {
+          // 没有 tool_call 标签，正常完成
+          aiLogger.info('Agent', '执行完成', {
+            toolsUsed: this.toolsUsed,
+            toolRounds: this.toolRounds,
+          })
+          return {
+            content: response.content,
+            toolsUsed: this.toolsUsed,
+            toolRounds: this.toolRounds,
+          }
         }
       }
 
       // 处理工具调用
-      await this.handleToolCalls(response.tool_calls)
+      await this.handleToolCalls(toolCallsToProcess!)
       this.toolRounds++
     }
 
@@ -196,7 +289,9 @@ export class Agent {
     // 执行循环
     while (this.toolRounds < this.config.maxToolRounds!) {
       let accumulatedContent = ''
+      let displayedContent = '' // 已发送给前端的内容
       let toolCalls: ToolCall[] | undefined
+      let isBufferingToolCall = false // 是否正在缓冲 tool_call 内容
 
       // 流式调用 LLM
       for await (const chunk of chatStream(this.messages, {
@@ -205,7 +300,32 @@ export class Agent {
       })) {
         if (chunk.content) {
           accumulatedContent += chunk.content
-          onChunk({ type: 'content', content: chunk.content })
+
+          // 检测是否开始出现 <tool_call> 或 <think> 标签
+          // 一旦检测到，停止向前端发送后续内容
+          if (!isBufferingToolCall) {
+            // 检查累积内容中是否有开始标签
+            if (/<tool_call>/i.test(accumulatedContent) || /<think>/i.test(accumulatedContent)) {
+              isBufferingToolCall = true
+              // 发送标签之前的内容（如果有）
+              const tagStart = Math.min(
+                accumulatedContent.indexOf('<tool_call>') >= 0 ? accumulatedContent.indexOf('<tool_call>') : Infinity,
+                accumulatedContent.indexOf('<think>') >= 0 ? accumulatedContent.indexOf('<think>') : Infinity
+              )
+              if (tagStart > displayedContent.length) {
+                const newContent = accumulatedContent.slice(displayedContent.length, tagStart)
+                if (newContent) {
+                  onChunk({ type: 'content', content: newContent })
+                  displayedContent = accumulatedContent.slice(0, tagStart)
+                }
+              }
+            } else {
+              // 正常发送内容
+              onChunk({ type: 'content', content: chunk.content })
+              displayedContent = accumulatedContent
+            }
+          }
+          // 如果已经在缓冲模式，不发送内容
         }
 
         if (chunk.tool_calls) {
@@ -213,20 +333,58 @@ export class Agent {
         }
 
         if (chunk.isFinished) {
-          // 如果是普通文本响应，完成
+          // 如果没有标准 tool_calls，尝试 fallback 解析
           if (chunk.finishReason !== 'tool_calls' || !toolCalls) {
-            finalContent = accumulatedContent
-            onChunk({ type: 'done', isFinished: true })
+            // Fallback: 检查内容中是否有 <tool_call> 标签
+            if (hasToolCallTags(accumulatedContent)) {
+              aiLogger.info('Agent', '检测到 <tool_call> 标签，执行 fallback 解析')
 
-            aiLogger.info('Agent', '流式执行完成', {
-              toolsUsed: this.toolsUsed,
-              toolRounds: this.toolRounds,
-            })
+              // 提取 thinking 内容
+              const { thinking, cleanContent } = extractThinkingContent(accumulatedContent)
+              if (thinking) {
+                aiLogger.info('Agent', '提取到 thinking 内容', { length: thinking.length })
+              }
 
-            return {
-              content: finalContent,
-              toolsUsed: this.toolsUsed,
-              toolRounds: this.toolRounds,
+              // 解析 tool_call 标签
+              const fallbackToolCalls = parseToolCallTags(accumulatedContent)
+              if (fallbackToolCalls && fallbackToolCalls.length > 0) {
+                aiLogger.info('Agent', 'Fallback 解析成功', {
+                  toolCount: fallbackToolCalls.length,
+                  tools: fallbackToolCalls.map((tc) => tc.function.name),
+                })
+                toolCalls = fallbackToolCalls
+                // 更新累积内容为清理后的内容（移除 think 和 tool_call 标签）
+                accumulatedContent = cleanContent.replace(/<tool_call>[\s\S]*?<\/tool_call>/gi, '').trim()
+                // 不返回，继续执行工具调用
+              } else {
+                // 解析失败，作为普通响应处理（发送清理后的内容）
+                const remainingContent = cleanContent.slice(displayedContent.length)
+                if (remainingContent) {
+                  onChunk({ type: 'content', content: remainingContent })
+                }
+                finalContent = cleanContent
+                onChunk({ type: 'done', isFinished: true })
+                return {
+                  content: finalContent,
+                  toolsUsed: this.toolsUsed,
+                  toolRounds: this.toolRounds,
+                }
+              }
+            } else {
+              // 没有 tool_call 标签，正常完成
+              finalContent = accumulatedContent
+              onChunk({ type: 'done', isFinished: true })
+
+              aiLogger.info('Agent', '流式执行完成', {
+                toolsUsed: this.toolsUsed,
+                toolRounds: this.toolRounds,
+              })
+
+              return {
+                content: finalContent,
+                toolsUsed: this.toolsUsed,
+                toolRounds: this.toolRounds,
+              }
             }
           }
         }

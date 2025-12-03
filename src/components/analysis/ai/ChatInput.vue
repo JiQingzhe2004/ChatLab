@@ -49,12 +49,7 @@ function handleStop() {
         variant="subtle"
         @submit="handleSubmit"
       >
-        <UChatPromptSubmit
-          :status="chatStatus"
-          class="rounded-full"
-          color="primary"
-          @stop="handleStop"
-        />
+        <UChatPromptSubmit :status="chatStatus" class="rounded-full" color="primary" @stop="handleStop" />
       </UChatPrompt>
     </div>
   </div>
