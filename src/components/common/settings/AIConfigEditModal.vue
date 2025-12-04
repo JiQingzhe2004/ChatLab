@@ -375,7 +375,7 @@ watch(
                       : 'text-gray-700 dark:text-gray-300',
                   ]"
                 >
-                  云端服务
+                  官方API
                 </p>
                 <p class="mt-0.5 text-[10px] text-gray-500">DeepSeek、Qwen</p>
               </div>

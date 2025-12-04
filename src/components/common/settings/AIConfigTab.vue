@@ -135,11 +135,11 @@ onMounted(() => {
 
   <!-- 配置列表视图 -->
   <div v-else class="space-y-4">
-    <UAlert color="warning" variant="outline" icon="i-lucide-terminal" class="p-2">
+    <UAlert v-if="configs.length === 0" color="warning" variant="outline" icon="i-lucide-terminal" class="p-2">
       <template #title>
         <p>
-          强烈建议配置本地模型，分析聊天记录更加安全，个人实测3B小模型也能满足分析需求，而且可以无限量分析聊天记录，参考教程
-          <a href="https://baidu.com" class="text-pink-500" target="_blank">配置Parallax本地模型</a>
+          强烈建议配置本地模型，分析聊天记录更加安全，个人实测3B小模型也能满足分析需求，而且可以无限量分析，本地模型部署参考教程
+          <a href="https://baidu.com" class="text-pink-500" target="_blank">使用Parallax配置本地模型</a>
         </p>
       </template>
     </UAlert>

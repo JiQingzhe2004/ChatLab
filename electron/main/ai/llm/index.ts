@@ -375,7 +375,7 @@ export function createLLMService(config: ExtendedLLMConfig): ILLMService {
       return new DeepSeekService(config.apiKey, config.model, config.baseUrl)
     case 'qwen':
       return new QwenService(config.apiKey, config.model, config.baseUrl)
-    // 新增的云端服务都使用 OpenAI 兼容格式
+    // 新增的官方API都使用 OpenAI 兼容格式
     case 'minimax':
     case 'glm':
     case 'kimi':
