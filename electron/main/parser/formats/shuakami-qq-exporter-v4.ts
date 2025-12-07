@@ -55,8 +55,9 @@ export const feature: FormatFeature = {
   priority: 10,
   extensions: ['.json'],
   signatures: {
+    // 文件头签名已足够唯一识别，无需检查 messages（可能超出 8KB 检测范围）
     head: [/QQChatExporter V4/, /"version"\s*:\s*"4\./],
-    requiredFields: ['metadata', 'chatInfo', 'messages'],
+    requiredFields: ['metadata', 'chatInfo'],
   },
 }
 
