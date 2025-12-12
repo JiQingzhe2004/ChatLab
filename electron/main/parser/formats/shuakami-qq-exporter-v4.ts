@@ -213,7 +213,7 @@ async function* parseV4(options: ParseOptions): AsyncGenerator<ParseEvent, void,
   // 读取文件头获取 meta 信息
   const headContent = readFileHeadBytes(filePath, 100000)
 
-  // 解析 chatInfo
+  // 解析 chatInfo（仅用于获取群名，type 字段不可靠）
   let chatInfo = { name: '未知群聊', type: 'group' as const }
   try {
     const chatInfoMatch = headContent.match(/"chatInfo"\s*:\s*(\{[^}]+\})/)
@@ -228,28 +228,48 @@ async function* parseV4(options: ParseOptions): AsyncGenerator<ParseEvent, void,
   // 私聊只有 2 个发送者，群聊有多个发送者
   let sendersCount = 0
   try {
-    // 匹配 "senders": [...] 数组（senders 后面通常是 "resources" 字段）
-    const sendersMatch = headContent.match(/"senders"\s*:\s*\[([\s\S]*?)\]\s*,\s*"resources"/)
-    if (sendersMatch) {
+    // 尝试多种正则匹配 senders 数组
+    // 方式1: senders 后面是 resources 字段
+    let sendersMatch = headContent.match(/"senders"\s*:\s*\[([\s\S]*?)\]\s*,\s*"resources"/)
+    // 方式2: senders 后面是 } 结束 statistics 对象
+    if (!sendersMatch) {
+      sendersMatch = headContent.match(/"senders"\s*:\s*\[([\s\S]*?)\]\s*\}/)
+    }
+    // 方式3: 更宽松的匹配，找到 senders 数组的开始和结束
+    if (!sendersMatch) {
+      const sendersStart = headContent.indexOf('"senders"')
+      if (sendersStart !== -1) {
+        const arrayStart = headContent.indexOf('[', sendersStart)
+        if (arrayStart !== -1 && arrayStart - sendersStart < 20) {
+          // 找到匹配的 ]
+          let depth = 1
+          let i = arrayStart + 1
+          while (i < headContent.length && depth > 0) {
+            if (headContent[i] === '[') depth++
+            else if (headContent[i] === ']') depth--
+            i++
+          }
+          if (depth === 0) {
+            const sendersContent = headContent.slice(arrayStart + 1, i - 1)
+            const uidMatches = sendersContent.match(/"uid"\s*:/g)
+            sendersCount = uidMatches ? uidMatches.length : 0
+          }
+        }
+      }
+    } else {
       // 计算 senders 数组中 uid 出现的次数来确定发送者数量
       const sendersContent = sendersMatch[1]
       const uidMatches = sendersContent.match(/"uid"\s*:/g)
       sendersCount = uidMatches ? uidMatches.length : 0
     }
   } catch {
-    // 解析失败时 fallback 到 chatInfo.type
+    // senders 解析失败
   }
 
   // 根据发送者数量判断聊天类型：私聊 <= 2 人，群聊 > 2 人
-  // 如果无法获取 senders 数量（sendersCount === 0），则 fallback 到 chatInfo.type
-  const chatType =
-    sendersCount > 0
-      ? sendersCount > 2
-        ? ChatType.GROUP
-        : ChatType.PRIVATE
-      : chatInfo.type === 'group'
-        ? ChatType.GROUP
-        : ChatType.PRIVATE
+  // 注意：chatInfo.type 字段不可靠（始终返回 private），不作为 fallback
+  // 如果无法获取 senders 数量，默认为群聊（群聊是更常见的使用场景）
+  const chatType = sendersCount > 0 ? (sendersCount > 2 ? ChatType.GROUP : ChatType.PRIVATE) : ChatType.GROUP // 默认为群聊
 
   // 发送 meta
   const meta: ParsedMeta = {
