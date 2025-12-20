@@ -1002,6 +1002,18 @@ const extendedApi = {
     fetchRemoteConfig: (url: string): Promise<{ success: boolean; data?: unknown; error?: string }> => {
       return ipcRenderer.invoke('app:fetchRemoteConfig', url)
     },
+    /**
+     * 获取匿名统计开关状态
+     */
+    getAnalyticsEnabled: (): Promise<boolean> => {
+      return ipcRenderer.invoke('analytics:getEnabled')
+    },
+    /**
+     * 设置匿名统计开关状态
+     */
+    setAnalyticsEnabled: (enabled: boolean): Promise<{ success: boolean }> => {
+      return ipcRenderer.invoke('analytics:setEnabled', enabled)
+    },
   },
 }
 
