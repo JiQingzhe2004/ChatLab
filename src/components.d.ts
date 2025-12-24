@@ -15,6 +15,7 @@ declare module 'vue' {
     RouterView: typeof import('vue-router')['RouterView']
     UAlert: typeof import('./../node_modules/.pnpm/@nuxt+ui@4.2.1_@babel+parser@7.28.5_axios@1.13.2_embla-carousel@8.6.0_typescript@5.9.3__1572391ae10a8169a5c9784ec5cec455/node_modules/@nuxt/ui/dist/runtime/components/Alert.vue')['default']
     UApp: typeof import('./../node_modules/.pnpm/@nuxt+ui@4.2.1_@babel+parser@7.28.5_axios@1.13.2_embla-carousel@8.6.0_typescript@5.9.3__1572391ae10a8169a5c9784ec5cec455/node_modules/@nuxt/ui/dist/runtime/components/App.vue')['default']
+    UAvatar: typeof import('./../node_modules/.pnpm/@nuxt+ui@4.2.1_@babel+parser@7.28.5_axios@1.13.2_embla-carousel@8.6.0_typescript@5.9.3__1572391ae10a8169a5c9784ec5cec455/node_modules/@nuxt/ui/dist/runtime/components/Avatar.vue')['default']
     UBadge: typeof import('./../node_modules/.pnpm/@nuxt+ui@4.2.1_@babel+parser@7.28.5_axios@1.13.2_embla-carousel@8.6.0_typescript@5.9.3__1572391ae10a8169a5c9784ec5cec455/node_modules/@nuxt/ui/dist/runtime/components/Badge.vue')['default']
     UButton: typeof import('./../node_modules/.pnpm/@nuxt+ui@4.2.1_@babel+parser@7.28.5_axios@1.13.2_embla-carousel@8.6.0_typescript@5.9.3__1572391ae10a8169a5c9784ec5cec455/node_modules/@nuxt/ui/dist/runtime/components/Button.vue')['default']
     UChatPrompt: typeof import('./../node_modules/.pnpm/@nuxt+ui@4.2.1_@babel+parser@7.28.5_axios@1.13.2_embla-carousel@8.6.0_typescript@5.9.3__1572391ae10a8169a5c9784ec5cec455/node_modules/@nuxt/ui/dist/runtime/components/ChatPrompt.vue')['default']
