@@ -1,9 +1,16 @@
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { storeToRefs } from 'pinia'
 import dayjs from 'dayjs'
+import { useToast } from '@nuxt/ui/runtime/composables/useToast.js'
+import { usePromptStore } from '@/stores/prompt'
+import { exportConversation, type ExportFormat } from '@/utils/conversationExport'
 
 const { t } = useI18n()
+const toast = useToast()
+const promptStore = usePromptStore()
+const { aiGlobalSettings } = storeToRefs(promptStore)
 
 interface Conversation {
   id: string
@@ -29,6 +36,7 @@ const emit = defineEmits<{
 // State
 const conversations = ref<Conversation[]>([])
 const isLoading = ref(false)
+const isExporting = ref<string | null>(null) // 正在导出的对话 ID
 const editingId = ref<string | null>(null)
 const editingTitle = ref('')
 const isCollapsed = ref(false)
@@ -45,10 +53,10 @@ async function loadConversations() {
   }
 }
 
-// 格式化时间
+// 格式化时间（数据库存储的是秒级时间戳，需转换为毫秒级）
 function formatTime(timestamp: number): string {
   const now = dayjs()
-  const date = dayjs(timestamp)
+  const date = dayjs(timestamp * 1000)
 
   if (now.diff(date, 'day') === 0) {
     return date.format('HH:mm')
@@ -94,6 +102,88 @@ async function handleDelete(convId: string) {
     emit('delete', convId)
   } catch (error) {
     console.error('删除对话失败：', error)
+  }
+}
+
+// 导出对话
+async function handleExport(conv: Conversation) {
+  if (isExporting.value) return
+
+  isExporting.value = conv.id
+  try {
+    // 获取对话消息
+    const messages = await window.aiApi.getMessages(conv.id)
+
+    if (messages.length === 0) {
+      toast.add({
+        title: t('conversation.export.noMessages'),
+        icon: 'i-heroicons-exclamation-triangle',
+        color: 'warning',
+        duration: 2000,
+      })
+      return
+    }
+
+    // 获取导出格式和标题
+    const format = (aiGlobalSettings.value.exportFormat || 'markdown') as ExportFormat
+    const title = conv.title || t('conversation.newChat')
+
+    // 导出标签（国际化）
+    const labels = {
+      createdAt: t('conversation.export.createdAt'),
+      user: t('conversation.export.user'),
+      assistant: t('conversation.export.assistant'),
+    }
+
+    // 转换消息时间戳（数据库存储的是秒级时间戳，需转换为毫秒级）
+    const messagesWithMs = messages.map((msg) => ({
+      ...msg,
+      timestamp: msg.timestamp * 1000,
+    }))
+
+    // 调用导出工具
+    const result = await exportConversation(title, messagesWithMs, conv.createdAt * 1000, format, labels)
+
+    if (result.success && result.filePath) {
+      // 获取文件名
+      const filename = result.filePath.split('/').pop() || result.filePath
+      const exportedFilePath = result.filePath
+      // 显示成功 toast
+      toast.add({
+        title: t('conversation.export.success'),
+        description: filename,
+        icon: 'i-heroicons-check-circle',
+        color: 'primary',
+        duration: 2000,
+        actions: [
+          {
+            label: t('conversation.export.openFolder'),
+            onClick: () => {
+              window.cacheApi.showInFolder(exportedFilePath)
+            },
+          },
+        ],
+      })
+    } else {
+      toast.add({
+        title: t('conversation.export.failed'),
+        description: result.error,
+        icon: 'i-heroicons-x-circle',
+        color: 'error',
+        duration: 2000,
+      })
+    }
+  } catch (error) {
+    console.error('导出对话失败：', error)
+    toast.add({
+      title: t('conversation.export.failed'),
+      description: String(error),
+      icon: 'i-heroicons-x-circle',
+      color: 'error',
+      duration: 2000,
+    })
+  } finally {
+    isExporting.value = null
   }
 }
 
@@ -165,7 +255,9 @@ defineExpose({
           <UIcon name="i-heroicons-chat-bubble-left" class="h-6 w-6 text-gray-300 dark:text-gray-600" />
         </div>
         <p class="mt-3 text-xs text-gray-400">{{ t('conversation.empty') }}</p>
-        <UButton class="mt-2" size="xs" variant="link" color="primary" @click="emit('create')">{{ t('conversation.startNew') }}</UButton>
+        <UButton class="mt-2" size="xs" variant="link" color="primary" @click="emit('create')">
+          {{ t('conversation.startNew') }}
+        </UButton>
       </div>
 
       <!-- 对话列表 -->
@@ -196,38 +288,70 @@ defineExpose({
 
           <!-- 正常模式 -->
           <template v-else>
-            <div class="flex items-start justify-between gap-2">
-              <div class="min-w-0 flex-1">
-                <p class="truncate text-sm font-medium">
-                  {{ getTitle(conv) }}
-                </p>
-                <p class="mt-1 text-[10px] text-gray-400 opacity-80">
-                  {{ formatTime(conv.updatedAt) }}
-                </p>
-              </div>
+            <div class="relative">
+              <!-- 标题 -->
+              <p class="line-clamp-1 pr-2 text-sm font-medium leading-snug">
+                {{ getTitle(conv) }}
+              </p>
 
-              <!-- 操作按钮 -->
+              <!-- 时间 -->
+              <p class="mt-1.5 text-[10px] text-gray-400">
+                {{ formatTime(conv.updatedAt) }}
+              </p>
+
+              <!-- 操作按钮（垂直居中，带渐变背景） -->
               <div
-                class="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100"
+                class="absolute inset-y-0 right-0 flex items-center opacity-0 transition-opacity group-hover:opacity-100"
                 :class="{ 'opacity-100': activeId === conv.id }"
                 @click.stop
               >
-                <UButton
-                  icon="i-heroicons-pencil"
-                  color="gray"
-                  variant="ghost"
-                  size="2xs"
-                  class="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
-                  @click="startEditing(conv)"
+                <!-- 左侧渐变过渡区域 -->
+                <div
+                  class="absolute inset-y-0 -left-6 w-6 bg-gradient-to-r from-transparent"
+                  :class="[
+                    activeId === conv.id
+                      ? 'to-gray-100 dark:to-gray-800'
+                      : 'to-white group-hover:to-gray-50 dark:to-gray-900 dark:group-hover:to-gray-800/50',
+                  ]"
                 />
-                <UButton
-                  icon="i-heroicons-trash"
-                  color="gray"
-                  variant="ghost"
-                  size="2xs"
-                  class="text-gray-400 hover:text-red-500 dark:hover:text-red-400"
-                  @click="handleDelete(conv.id)"
-                />
+                <!-- 按钮组（实色背景，h-full 确保完全覆盖） -->
+                <div
+                  class="relative flex h-full items-center gap-0.5 pl-1 pr-0.5"
+                  :class="[
+                    activeId === conv.id
+                      ? 'bg-gray-100 dark:bg-gray-800'
+                      : 'bg-white group-hover:bg-gray-50 dark:bg-gray-900 dark:group-hover:bg-gray-800/50',
+                  ]"
+                >
+                  <UButton
+                    :icon="isExporting === conv.id ? 'i-heroicons-arrow-path' : 'i-heroicons-arrow-down-tray'"
+                    color="gray"
+                    variant="ghost"
+                    size="2xs"
+                    :class="[
+                      isExporting === conv.id ? 'animate-spin' : '',
+                      'text-gray-400 hover:text-primary-500 dark:hover:text-primary-400',
+                    ]"
+                    :disabled="isExporting !== null"
+                    @click="handleExport(conv)"
+                  />
+                  <UButton
+                    icon="i-heroicons-pencil"
+                    color="gray"
+                    variant="ghost"
+                    size="2xs"
+                    class="text-gray-400 hover:text-primary-500 dark:hover:text-primary-400"
+                    @click="startEditing(conv)"
+                  />
+                  <UButton
+                    icon="i-heroicons-trash"
+                    color="gray"
+                    variant="ghost"
+                    size="2xs"
+                    class="text-gray-400 hover:text-primary-500 dark:hover:text-primary-400"
+                    @click="handleDelete(conv.id)"
+                  />
+                </div>
               </div>
             </div>
           </template>
@@ -272,7 +396,16 @@ defineExpose({
       "newChat": "新对话",
       "empty": "暂无历史记录",
       "startNew": "开始新对话",
-      "titlePlaceholder": "输入标题..."
+      "titlePlaceholder": "输入标题...",
+      "export": {
+        "createdAt": "创建时间",
+        "user": "用户",
+        "assistant": "AI 助手",
+        "success": "导出成功",
+        "failed": "导出失败",
+        "openFolder": "打开目录",
+        "noMessages": "对话没有消息"
+      }
     }
   },
   "en-US": {
@@ -281,7 +414,16 @@ defineExpose({
       "newChat": "New Chat",
       "empty": "No history yet",
       "startNew": "Start New Chat",
-      "titlePlaceholder": "Enter title..."
+      "titlePlaceholder": "Enter title...",
+      "export": {
+        "createdAt": "Created",
+        "user": "User",
+        "assistant": "AI Assistant",
+        "success": "Export successful",
+        "failed": "Export failed",
+        "openFolder": "Open folder",
+        "noMessages": "No messages to export"
+      }
     }
   }
 }

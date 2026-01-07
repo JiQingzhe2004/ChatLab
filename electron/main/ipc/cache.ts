@@ -180,6 +180,9 @@ export function registerCacheHandlers(_context: IpcContext): void {
 
   /**
    * 保存文件到下载目录
+   * 支持两种 data URL 格式：
+   * 1. base64: data:image/png;base64,xxx
+   * 2. URL 编码: data:text/plain;charset=utf-8,xxx
    */
   ipcMain.handle('cache:saveToDownloads', async (_, filename: string, dataUrl: string) => {
     const chatLabDir = getChatLabDir()
@@ -191,9 +194,23 @@ export function registerCacheHandlers(_context: IpcContext): void {
         await fs.mkdir(downloadsDir, { recursive: true })
       }
 
-      // 从 data URL 中提取 base64 数据
-      const base64Data = dataUrl.replace(/^data:image\/\w+;base64,/, '')
-      const buffer = Buffer.from(base64Data, 'base64')
+      let buffer: Buffer
+
+      // 解析 data URL
+      if (dataUrl.includes(';base64,')) {
+        // Base64 编码格式（图片等二进制数据）
+        const base64Data = dataUrl.split(';base64,')[1]
+        buffer = Buffer.from(base64Data, 'base64')
+      } else if (dataUrl.includes('charset=utf-8,')) {
+        // URL 编码格式（文本数据）
+        const textData = dataUrl.split('charset=utf-8,')[1]
+        const decodedText = decodeURIComponent(textData)
+        buffer = Buffer.from(decodedText, 'utf-8')
+      } else {
+        // 默认尝试作为 base64 处理
+        const base64Data = dataUrl.replace(/^data:[^,]+,/, '')
+        buffer = Buffer.from(base64Data, 'base64')
+      }
 
       // 写入文件
       const filePath = path.join(downloadsDir, filename)

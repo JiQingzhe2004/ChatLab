@@ -47,6 +47,7 @@ export const usePromptStore = defineStore(
     const aiGlobalSettings = ref({
       maxMessagesPerRequest: 500,
       maxHistoryRounds: 5, // AI上下文会话轮数限制
+      exportFormat: 'markdown' as 'markdown' | 'txt', // 对话导出格式
     })
     const customKeywordTemplates = ref<KeywordTemplate[]>([])
     const deletedPresetTemplateIds = ref<string[]>([])
@@ -96,7 +97,9 @@ export const usePromptStore = defineStore(
     /**
      * 更新 AI 全局设置
      */
-    function updateAIGlobalSettings(settings: Partial<{ maxMessagesPerRequest: number; maxHistoryRounds: number }>) {
+    function updateAIGlobalSettings(
+      settings: Partial<{ maxMessagesPerRequest: number; maxHistoryRounds: number; exportFormat: 'markdown' | 'txt' }>
+    ) {
       aiGlobalSettings.value = { ...aiGlobalSettings.value, ...settings }
       notifyAIConfigChanged()
     }
@@ -290,8 +293,7 @@ export const usePromptStore = defineStore(
 
         // 过滤无效数据
         return remotePresets.filter(
-          (preset) =>
-            preset.id && preset.name && preset.chatType && preset.roleDefinition && preset.responseRules
+          (preset) => preset.id && preset.name && preset.chatType && preset.roleDefinition && preset.responseRules
         )
       } catch {
         return []

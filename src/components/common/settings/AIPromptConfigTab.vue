@@ -45,6 +45,21 @@ const globalMaxHistoryRounds = computed({
   },
 })
 
+// 导出格式选项
+const exportFormatTabs = computed(() => [
+  { label: 'Markdown', value: 'markdown' },
+  { label: t('settings.aiPrompt.exportFormat.txtLabel'), value: 'txt' },
+])
+
+// 当前选中的导出格式
+const exportFormat = computed({
+  get: () => aiGlobalSettings.value.exportFormat ?? 'markdown',
+  set: (val: string) => {
+    promptStore.updateAIGlobalSettings({ exportFormat: val as 'markdown' | 'txt' })
+    emit('config-changed')
+  },
+})
+
 /** 打开新增预设弹窗 */
 function openAddModal(chatType: 'group' | 'private') {
   editMode.value = 'add'
@@ -135,6 +150,19 @@ function handleImportPresetAdded() {
             </p>
           </div>
           <UInput v-model.number="globalMaxHistoryRounds" type="number" min="1" max="50" class="w-24" />
+        </div>
+
+        <!-- 导出格式 -->
+        <div class="flex items-center justify-between">
+          <div class="flex-1 pr-4">
+            <p class="text-sm font-medium text-gray-900 dark:text-white">
+              {{ t('settings.aiPrompt.exportFormat.title') }}
+            </p>
+            <p class="text-xs text-gray-500 dark:text-gray-400">
+              {{ t('settings.aiPrompt.exportFormat.description') }}
+            </p>
+          </div>
+          <UTabs v-model="exportFormat" :items="exportFormatTabs" size="xs" />
         </div>
       </div>
     </div>

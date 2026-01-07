@@ -138,6 +138,11 @@
       "title": "AI上下文限制",
       "description": "每次对话保留最近的对话轮数（1轮 = 用户提问 + AI回复），防止上下文过长消耗 Token"
     },
+    "exportFormat": {
+      "title": "对话导出格式",
+      "description": "导出 AI 对话时使用的文件格式",
+      "txtLabel": "TXT"
+    },
     "presets": {
       "title": "系统提示词",
       "import": "导入预设"
