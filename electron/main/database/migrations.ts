@@ -136,39 +136,36 @@ function setSchemaVersion(db: Database.Database, version: number): void {
  * 自动检测当前版本并执行所有需要的迁移
  *
  * @param db 数据库连接
+ * @param forceRepair 是否强制修复（即使版本号已是最新也重新执行迁移脚本）
  * @returns 是否执行了迁移
  */
-export function migrateDatabase(db: Database.Database): boolean {
+export function migrateDatabase(db: Database.Database, forceRepair = false): boolean {
   const currentVersion = getSchemaVersion(db)
 
-  // 已是最新版本，无需迁移
-  if (currentVersion >= CURRENT_SCHEMA_VERSION) {
+  // 如果不是强制修复模式，检查版本号
+  if (!forceRepair && currentVersion >= CURRENT_SCHEMA_VERSION) {
     return false
   }
 
   // 获取需要执行的迁移
-  const pendingMigrations = migrations.filter((m) => m.version > currentVersion)
+  // 如果是强制修复，从 version 0 开始执行所有迁移
+  const pendingMigrations = forceRepair
+    ? migrations
+    : migrations.filter((m) => m.version > currentVersion)
 
   if (pendingMigrations.length === 0) {
     return false
   }
 
-  console.log(
-    `[Migration] 数据库版本 ${currentVersion} -> ${CURRENT_SCHEMA_VERSION}，执行 ${pendingMigrations.length} 个迁移`
-  )
-
   // 在事务中执行所有迁移
   const migrate = db.transaction(() => {
     for (const migration of pendingMigrations) {
-      console.log(`[Migration] 执行迁移 v${migration.version}: ${migration.description}`)
       migration.up(db)
       setSchemaVersion(db, migration.version)
     }
   })
 
   migrate()
-
-  console.log(`[Migration] 迁移完成，当前版本: ${CURRENT_SCHEMA_VERSION}`)
   return true
 }
 

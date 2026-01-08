@@ -121,8 +121,10 @@ export function openDatabase(sessionId: string, readonly = true): Database.Datab
 /**
  * 打开数据库并执行迁移（如果需要）
  * 用于需要写入的场景
+ * @param sessionId 会话ID
+ * @param forceRepair 是否强制修复（即使版本号已是最新也重新执行迁移脚本）
  */
-export function openDatabaseWithMigration(sessionId: string): Database.Database | null {
+export function openDatabaseWithMigration(sessionId: string, forceRepair = false): Database.Database | null {
   const dbPath = getDbPath(sessionId)
   if (!fs.existsSync(dbPath)) {
     return null
@@ -132,7 +134,7 @@ export function openDatabaseWithMigration(sessionId: string): Database.Database 
   db.pragma('journal_mode = WAL')
 
   // 执行迁移
-  migrateDatabase(db)
+  migrateDatabase(db, forceRepair)
 
   return db
 }
@@ -368,13 +370,19 @@ export function getDbDirectory(): string {
 
 /**
  * 检查是否有数据库需要迁移
- * @returns 需要迁移的数据库数量和最低版本
+ * @returns 需要迁移的数据库数量、列表、最低版本和需要强制修复的列表
  */
-export function checkMigrationNeeded(): { count: number; sessionIds: string[]; lowestVersion: number } {
+export function checkMigrationNeeded(): {
+  count: number
+  sessionIds: string[]
+  lowestVersion: number
+  forceRepairIds: string[]
+} {
   ensureDbDir()
   const dbDir = getDbDir()
   const files = fs.readdirSync(dbDir).filter((f) => f.endsWith('.db'))
   const needsMigrationList: string[] = []
+  const forceRepairList: string[] = []
   let lowestVersion = CURRENT_SCHEMA_VERSION
 
   for (const file of files) {
@@ -385,18 +393,28 @@ export function checkMigrationNeeded(): { count: number; sessionIds: string[]; l
       const db = new Database(dbPath, { readonly: true })
       db.pragma('journal_mode = WAL')
 
+      // 获取当前 schema_version
+      const metaTableInfo = db.prepare('PRAGMA table_info(meta)').all() as Array<{ name: string }>
+      const hasVersionColumn = metaTableInfo.some((col) => col.name === 'schema_version')
+      let dbVersion = 0
+      if (hasVersionColumn) {
+        const result = db.prepare('SELECT schema_version FROM meta LIMIT 1').get() as
+          | { schema_version: number | null }
+          | undefined
+        dbVersion = result?.schema_version ?? 0
+      }
+
+      // 检查 message 表是否有 reply_to_message_id 列
+      const messageTableInfo = db.prepare('PRAGMA table_info(message)').all() as Array<{ name: string }>
+      const hasReplyColumn = messageTableInfo.some((col) => col.name === 'reply_to_message_id')
+
       if (needsMigration(db)) {
         needsMigrationList.push(sessionId)
-        // 获取这个数据库的版本
-        const tableInfo = db.prepare('PRAGMA table_info(meta)').all() as Array<{ name: string }>
-        const hasVersionColumn = tableInfo.some((col) => col.name === 'schema_version')
-        let dbVersion = 0
-        if (hasVersionColumn) {
-          const result = db.prepare('SELECT schema_version FROM meta LIMIT 1').get() as
-            | { schema_version: number | null }
-            | undefined
-          dbVersion = result?.schema_version ?? 0
-        }
+        lowestVersion = Math.min(lowestVersion, dbVersion)
+      } else if (!hasReplyColumn) {
+        // 特殊情况：版本号已更新但列不存在，需要强制修复
+        needsMigrationList.push(sessionId)
+        forceRepairList.push(sessionId)
         lowestVersion = Math.min(lowestVersion, dbVersion)
       }
 
@@ -406,7 +424,7 @@ export function checkMigrationNeeded(): { count: number; sessionIds: string[]; l
     }
   }
 
-  return { count: needsMigrationList.length, sessionIds: needsMigrationList, lowestVersion }
+  return { count: needsMigrationList.length, sessionIds: needsMigrationList, lowestVersion, forceRepairIds: forceRepairList }
 }
 
 /**
@@ -414,7 +432,8 @@ export function checkMigrationNeeded(): { count: number; sessionIds: string[]; l
  * @returns 迁移结果
  */
 export function migrateAllDatabases(): { success: boolean; migratedCount: number; error?: string } {
-  const { sessionIds } = checkMigrationNeeded()
+  const { sessionIds, forceRepairIds } = checkMigrationNeeded()
+  const forceRepairSet = new Set(forceRepairIds)
 
   if (sessionIds.length === 0) {
     return { success: true, migratedCount: 0 }
@@ -424,7 +443,8 @@ export function migrateAllDatabases(): { success: boolean; migratedCount: number
 
   for (const sessionId of sessionIds) {
     try {
-      const db = openDatabaseWithMigration(sessionId)
+      const needsForceRepair = forceRepairSet.has(sessionId)
+      const db = openDatabaseWithMigration(sessionId, needsForceRepair)
       if (db) {
         db.close()
         migratedCount++

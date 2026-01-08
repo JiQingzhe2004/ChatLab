@@ -6,6 +6,7 @@ import mainIpcMain from './ipcMain'
 import { initAnalytics, trackDailyActive } from './analytics'
 import { initProxy } from './network/proxy'
 import { needsLegacyMigration, migrateFromLegacyDir, ensureAppDirs } from './paths'
+import { migrateAllDatabases, checkMigrationNeeded } from './database/core'
 
 class MainProcess {
   mainWindow: BrowserWindow | null
@@ -54,6 +55,9 @@ class MainProcess {
     // 确保应用目录存在
     ensureAppDirs()
 
+    // 执行数据库 schema 迁移（确保所有数据库在 Worker 查询前已是最新 schema）
+    this.migrateDatabasesIfNeeded()
+
     initProxy() // 初始化代理配置
 
     // 注册应用协议
@@ -78,6 +82,21 @@ class MainProcess {
       }
     } else {
       console.log('[Main] No legacy data migration needed')
+    }
+  }
+
+  // 执行数据库 schema 迁移（静默迁移）
+  migrateDatabasesIfNeeded() {
+    try {
+      const { count } = checkMigrationNeeded()
+      if (count > 0) {
+        const result = migrateAllDatabases()
+        if (!result.success) {
+          console.error('[Main] Database schema migration failed:', result.error)
+        }
+      }
+    } catch (error) {
+      console.error('[Main] Error in migrateDatabasesIfNeeded:', error)
     }
   }
 
