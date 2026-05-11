@@ -1,0 +1,83 @@
+/**
+ * 数据库连接管理器
+ *
+ * 管理 ChatLab 会话数据库的打开、缓存与关闭。
+ * 等效于 electron/main/worker/core/dbCore.ts 中的 dbCache 机制，
+ * 但基于 DatabaseAdapter 接口而非直接使用 better-sqlite3。
+ */
+
+import * as fs from 'fs'
+import * as path from 'path'
+import type { DatabaseAdapter, PathProvider } from '@openchatlab/core'
+import { isChatSessionDb } from '@openchatlab/core'
+import { openBetterSqliteDatabase } from './better-sqlite3-adapter'
+
+export class DatabaseManager {
+  private cache = new Map<string, DatabaseAdapter>()
+
+  constructor(private pathProvider: PathProvider) {}
+
+  /**
+   * 打开指定会话的数据库（带缓存）
+   */
+  open(sessionId: string, options?: { readonly?: boolean }): DatabaseAdapter | null {
+    if (this.cache.has(sessionId)) {
+      return this.cache.get(sessionId)!
+    }
+
+    const dbPath = this.getDbPath(sessionId)
+    if (!fs.existsSync(dbPath)) return null
+
+    const adapter = openBetterSqliteDatabase(dbPath, {
+      readonly: options?.readonly ?? true,
+    })
+    this.cache.set(sessionId, adapter)
+    return adapter
+  }
+
+  /**
+   * 关闭指定会话的数据库连接
+   */
+  close(sessionId: string): void {
+    const adapter = this.cache.get(sessionId)
+    if (adapter) {
+      adapter.close()
+      this.cache.delete(sessionId)
+    }
+  }
+
+  /**
+   * 关闭所有数据库连接
+   */
+  closeAll(): void {
+    for (const [id, adapter] of this.cache) {
+      adapter.close()
+      this.cache.delete(id)
+    }
+  }
+
+  /**
+   * 列举数据库目录下的所有聊天会话 ID
+   */
+  listSessionIds(): string[] {
+    const dbDir = this.pathProvider.getDatabaseDir()
+    if (!fs.existsSync(dbDir)) return []
+
+    return fs
+      .readdirSync(dbDir)
+      .filter((f) => f.endsWith('.db'))
+      .map((f) => f.replace('.db', ''))
+      .filter((id) => {
+        const db = this.open(id)
+        if (!db) return false
+        return isChatSessionDb(db)
+      })
+  }
+
+  /**
+   * 获取数据库文件路径
+   */
+  getDbPath(sessionId: string): string {
+    return path.join(this.pathProvider.getDatabaseDir(), `${sessionId}.db`)
+  }
+}
