@@ -9,6 +9,7 @@ import AIChatInput from './input/AIChatInput.vue'
 import AIThinkingIndicator from './chat/AIThinkingIndicator.vue'
 import ChatStatusBar from './chat/ChatStatusBar.vue'
 import { useAIChat } from '@/composables/useAIChat'
+import { useAIService } from '@/services'
 import CaptureButton from '@/components/common/CaptureButton.vue'
 import AssistantInlineBar from './assistant/AssistantInlineBar.vue'
 import AssistantConfigModal from './assistant/AssistantConfigModal.vue'
@@ -102,7 +103,7 @@ watch(
       return
     }
     try {
-      const result = await window.aiApi.estimateContextTokens(convId)
+      const result = await useAIService().estimateContextTokens(convId)
       if (result.success) {
         estimatedContextTokens.value = result.tokens
       }

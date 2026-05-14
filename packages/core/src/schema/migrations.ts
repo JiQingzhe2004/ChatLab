@@ -61,20 +61,14 @@ export function needsMigration(db: DatabaseAdapter, targetVersion: number): bool
  * @param forceRepair 是否强制修复
  * @returns 是否执行了迁移
  */
-export function runMigrations(
-  db: DatabaseAdapter,
-  migrationsList: Migration[],
-  forceRepair = false
-): boolean {
+export function runMigrations(db: DatabaseAdapter, migrationsList: Migration[], forceRepair = false): boolean {
   const currentVersion = getSchemaVersion(db)
 
   if (!forceRepair && currentVersion >= (migrationsList.at(-1)?.version ?? 0)) {
     return false
   }
 
-  const pending = forceRepair
-    ? migrationsList
-    : migrationsList.filter((m) => m.version > currentVersion)
+  const pending = forceRepair ? migrationsList : migrationsList.filter((m) => m.version > currentVersion)
 
   if (pending.length === 0) return false
 

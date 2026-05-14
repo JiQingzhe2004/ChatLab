@@ -2,7 +2,7 @@
 import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { TableSchema } from './types'
-import { getAdapter } from '@/adapters'
+import { useDataService } from '@/services'
 import { getTableLabel, getColumnLabel } from './types'
 import type { LocaleType } from '@/i18n/types'
 
@@ -26,7 +26,7 @@ const expandedTables = ref<Set<string>>(new Set())
 // 加载 Schema
 async function loadSchema() {
   try {
-    schema.value = await getAdapter().getSchema(props.sessionId)
+    schema.value = await useDataService().getSchema(props.sessionId)
     // 默认展开所有表
     schema.value.forEach((table) => expandedTables.value.add(table.name))
   } catch (err) {

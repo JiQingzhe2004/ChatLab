@@ -10,7 +10,7 @@ import { storeToRefs } from 'pinia'
 import { usePromptStore } from '@/stores/prompt'
 import { useSessionStore } from '@/stores/session'
 import { useSettingsStore } from '@/stores/settings'
-import { getAdapter } from '@/adapters'
+import { useDataService, useAIService } from '@/services'
 import { useAssistantStore } from '@/stores/assistant'
 import { useSkillStore } from '@/stores/skill'
 import type { TokenUsage, AgentRuntimeStatus, SerializedErrorInfo } from '@electron/shared/types'
@@ -349,7 +349,7 @@ export const useAIChatStore = defineStore('aiChatRuntime', () => {
     }
 
     try {
-      const members = await getAdapter().getMembers(state.sessionId)
+      const members = await useDataService().getMembers(state.sessionId)
       const ownerMember = members.find((member) => member.platformId === ownerId)
       state.ownerInfo = ownerMember
         ? {
@@ -447,13 +447,13 @@ export const useAIChatStore = defineStore('aiChatRuntime', () => {
     if (!state) return false
 
     try {
-      const conversation = await window.aiApi.getConversation(conversationId)
+      const conversation = await useAIService().getConversation(conversationId)
       const buffer = getOrCreateBuffer(state, conversationId, conversation?.assistantId ?? null)
 
       if (!buffer.loaded) {
         const [history, tokenUsage] = await Promise.all([
-          window.aiApi.getMessages(conversationId),
-          window.aiApi.getConversationTokenUsage(conversationId),
+          useAIService().getMessages(conversationId),
+          useAIService().getConversationTokenUsage(conversationId),
         ])
         buffer.messages.splice(
           0,
@@ -755,7 +755,7 @@ export const useAIChatStore = defineStore('aiChatRuntime', () => {
       const currentAssistantId = targetBuffer.assistantId ?? getDefaultGeneralAssistantId(state.locale)
       if (!resolvedConversationId) {
         const title = content.slice(0, 50) + (content.length > 50 ? '...' : '')
-        const conversation = await window.aiApi.createConversation(state.sessionId, title, currentAssistantId)
+        const conversation = await useAIService().createConversation(state.sessionId, title, currentAssistantId)
         if (state.isAborted) {
           updateAIMessage({ isStreaming: false })
           clearActiveTask(chatKey, thisRequestId)
@@ -1033,11 +1033,11 @@ export const useAIChatStore = defineStore('aiChatRuntime', () => {
         return
       }
 
-      await window.aiApi.addMessage(conversationId, 'user', userMsg.content)
+      await useAIService().addMessage(conversationId, 'user', userMsg.content)
       const serializableContentBlocks = aiMsg.contentBlocks
         ? JSON.parse(JSON.stringify(aiMsg.contentBlocks))
         : undefined
-      await window.aiApi.addMessage(
+      await useAIService().addMessage(
         conversationId,
         'assistant',
         aiMsg.content,

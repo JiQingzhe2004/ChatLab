@@ -8,7 +8,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useSessionStore } from '@/stores/session'
 import type { MemberWithStats } from '@/types/analysis'
-import { getAdapter } from '@/adapters'
+import { useDataService } from '@/services'
 import Tabs from '@/components/UI/Tabs.vue'
 
 const { t } = useI18n()
@@ -67,7 +67,7 @@ async function loadMembers() {
 
   isLoadingMembers.value = true
   try {
-    members.value = await getAdapter().getMembers(sessionId)
+    members.value = await useDataService().getMembers(sessionId)
   } catch (error) {
     console.error('加载成员失败:', error)
   } finally {
@@ -81,7 +81,7 @@ async function loadTimeRange() {
   if (!sessionId) return
 
   try {
-    const range = await getAdapter().getTimeRange(sessionId)
+    const range = await useDataService().getTimeRange(sessionId)
     if (range) {
       dbTimeRange.value = range
     }

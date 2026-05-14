@@ -6,6 +6,7 @@ import { ref } from 'vue'
 import { captureAsImageData } from '@/utils/snapCapture'
 import { useToast } from '@/composables/useToast'
 import { useLayoutStore } from '@/stores/layout'
+import { usePlatformService } from '@/services'
 
 /** 默认移动端最大宽度 */
 const DEFAULT_MOBILE_MAX_WIDTH = 525
@@ -413,7 +414,7 @@ export function useScreenCapture() {
       })
 
       // 自动复制到剪贴板
-      const copyResult = await window.api.clipboard.copyImage(imageData)
+      const copyResult = await usePlatformService().copyImageToClipboard(imageData)
 
       if (copyResult.success) {
         // 显示成功 Toast（包含预览和下载按钮）

@@ -1,12 +1,10 @@
 /**
  * 高级分析模块入口
- * 统一导出所有分析函数
+ * 所有查询逻辑委托给 @openchatlab/core
  */
 
-// 口头禅分析
 export { getCatchphraseAnalysis } from './repeat'
 
-// 社交分析：@ 互动、含笑量、小团体
 export { getMentionAnalysis, getMentionGraph, getLaughAnalysis, getClusterGraph } from './social'
 export type {
   MentionGraphData,
@@ -18,10 +16,8 @@ export type {
   ClusterGraphOptions,
 } from './social'
 
-// 语言偏好分析（私聊专用）
 export { getLanguagePreferenceAnalysis } from './languagePreference'
 
-// 关系分析（私聊主动性）
 export { getRelationshipStats } from './relationship'
 export type {
   RelationshipStats,

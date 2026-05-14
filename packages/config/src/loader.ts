@@ -114,10 +114,7 @@ function deepMerge(base: Record<string, unknown>, override: Record<string, unkno
   const result = { ...base }
   for (const [key, value] of Object.entries(override)) {
     if (value !== undefined && value !== null && typeof value === 'object' && !Array.isArray(value)) {
-      result[key] = deepMerge(
-        (result[key] as Record<string, unknown>) ?? {},
-        value as Record<string, unknown>
-      )
+      result[key] = deepMerge((result[key] as Record<string, unknown>) ?? {}, value as Record<string, unknown>)
     } else if (value !== undefined) {
       result[key] = value
     }

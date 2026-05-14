@@ -10,6 +10,7 @@ import SidebarSortPopover from './sidebar/SidebarSortPopover.vue'
 import SubTabs from '@/components/UI/SubTabs.vue'
 import { useSessionStore } from '@/stores/session'
 import { useLayoutStore } from '@/stores/layout'
+import { usePlatformService } from '@/services'
 import { IS_ELECTRON } from '@/utils/platform'
 
 const { t } = useI18n()
@@ -72,7 +73,7 @@ onMounted(async () => {
   sessionStore.loadSessions()
   if (IS_ELECTRON) {
     try {
-      version.value = await window.api.app.getVersion()
+      version.value = await usePlatformService().getVersion()
     } catch (e) {
       console.error('Failed to get version', e)
     }

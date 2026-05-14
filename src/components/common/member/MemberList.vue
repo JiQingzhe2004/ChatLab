@@ -3,7 +3,7 @@ import { ref, computed, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { MemberWithStats } from '@/types/analysis'
 import OwnerSelector from '@/components/analysis/member/OwnerSelector.vue'
-import { getAdapter } from '@/adapters'
+import { useDataService } from '@/services'
 
 const { t } = useI18n()
 
@@ -91,7 +91,7 @@ async function loadMembers() {
   if (!props.sessionId) return
   isLoading.value = true
   try {
-    const result = await getAdapter().getMembersPaginated(props.sessionId, {
+    const result = await useDataService().getMembersPaginated(props.sessionId, {
       page: currentPage.value,
       pageSize,
       search: searchQuery.value.trim(),
@@ -111,7 +111,7 @@ async function loadMembers() {
 async function loadAllMembers() {
   if (!props.sessionId) return
   try {
-    allMembers.value = await getAdapter().getMembers(props.sessionId)
+    allMembers.value = await useDataService().getMembers(props.sessionId)
   } catch (error) {
     console.error('加载所有成员失败:', error)
   }
@@ -129,7 +129,7 @@ async function updateAliases(member: MemberWithStats, newAliases: string[]) {
 
   savingAliasesId.value = member.id
   try {
-    const success = await getAdapter().updateMemberAliases(props.sessionId, member.id, aliasesToSave)
+    const success = await useDataService().updateMemberAliases(props.sessionId, member.id, aliasesToSave)
     if (success) {
       // 更新本地数据 - 找到对应成员并更新
       const idx = members.value.findIndex((m) => m.id === member.id)
@@ -162,7 +162,7 @@ async function confirmDelete() {
   if (!deletingMember.value) return
   isDeleting.value = true
   try {
-    const success = await getAdapter().deleteMember(props.sessionId, deletingMember.value.id)
+    const success = await useDataService().deleteMember(props.sessionId, deletingMember.value.id)
     if (success) {
       // 重新加载当前页数据
       await loadMembers()
@@ -202,7 +202,7 @@ async function confirmMerge() {
   if (!mergePlan.value) return
   isMerging.value = true
   try {
-    const success = await getAdapter().mergeMembers(
+    const success = await useDataService().mergeMembers(
       props.sessionId,
       mergePlan.value.primary.id,
       mergePlan.value.secondary.id

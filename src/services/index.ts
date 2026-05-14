@@ -7,9 +7,56 @@
 
 export { initServices, detectPlatform, type Platform } from './registry'
 
-// Phase 1: export { useDataService } from './data/service'
-// Phase 2: export { useImportService } from './import/service'
-// Phase 3: export { useSessionIndexService } from './session-index/service'
-// Phase 4: export { useMessageService } from './message/service'
-// Phase 5: export { usePlatformService } from './platform/service'
-// Phase 6: export { useAIService } from './ai/service'
+export { useDataService } from './data/service'
+export type { DataAdapter } from './data/types'
+export type {
+  PaginationParams,
+  PaginatedResult,
+  SQLResult,
+  TableSchema,
+  MentionGraphData,
+  MessageLengthDistribution,
+} from './data/types'
+
+export { useImportService } from './import/service'
+export type {
+  ImportAdapter,
+  ImportOptions,
+  ImportResult,
+  ImportDiagnosticsInfo,
+  FormatInfo,
+  MultiChatEntry,
+  DemoProgress,
+  DemoImportResult,
+  IncrementalAnalysis,
+  IncrementalImportResult,
+} from './import/types'
+export { useSessionIndexService } from './session-index/service'
+export type {
+  SessionIndexAdapter,
+  SessionStats,
+  ChatSessionItem,
+  SummaryResult,
+  BatchSummaryResult,
+  CanGenerateInfo,
+} from './session-index/types'
+export { useMessageService } from './message/service'
+export type { MessageAdapter, TimeFilter, MessageRecord, PaginatedMessages, SearchResult } from './message/types'
+export { usePlatformService } from './platform/service'
+export type { PlatformAdapter, OpenDialogOptions, OpenDialogResult, RemoteConfigResult } from './platform/types'
+export { useAIService } from './ai/service'
+export type {
+  AIAdapter,
+  AIConversation,
+  AIMessage,
+  AIMessageRole,
+  ContentBlock,
+  TokenUsageData,
+  DesensitizeRule,
+  ToolCatalogEntry,
+  ToolExecuteResult,
+  FilterResultWithPagination,
+  ExportFilterParams,
+  AiSQLResult,
+  AiSchemaTable,
+} from './ai/types'

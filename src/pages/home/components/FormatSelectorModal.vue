@@ -5,13 +5,8 @@
  */
 import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-
-interface FormatInfo {
-  id: string
-  name: string
-  platform: string
-  extensions: string[]
-}
+import { useImportService } from '@/services'
+import type { FormatInfo } from '@/services'
 
 const props = defineProps<{
   open: boolean
@@ -67,7 +62,7 @@ function getPlatformIcon(platform: string): string {
 async function loadFormats() {
   loading.value = true
   try {
-    const result = await window.chatApi.getSupportedFormats()
+    const result = await useImportService().getSupportedFormats()
     formats.value = result
   } catch {
     formats.value = []

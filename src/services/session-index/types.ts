@@ -1,0 +1,60 @@
+/**
+ * SessionIndexAdapter — 会话索引领域适配器接口
+ *
+ * 负责会话切分索引的生成、查询、摘要等操作。
+ * 来源：window.sessionApi（Electron IPC）/ web-api-shim 垫片（Web SQL）
+ */
+
+export interface SessionStats {
+  sessionCount: number
+  hasIndex: boolean
+  gapThreshold: number
+}
+
+export interface ChatSessionItem {
+  id: number
+  startTs: number
+  endTs: number
+  messageCount: number
+  firstMessageId: number
+  summary?: string | null
+}
+
+export interface SummaryResult {
+  success: boolean
+  summary?: string
+  error?: string
+}
+
+export interface BatchSummaryResult {
+  success: number
+  failed: number
+  skipped: number
+}
+
+export interface CanGenerateInfo {
+  canGenerate: boolean
+  reason?: string
+}
+
+export interface SessionIndexAdapter {
+  generate(sessionId: string, gapThreshold?: number): Promise<number>
+  hasIndex(sessionId: string): Promise<boolean>
+  getStats(sessionId: string): Promise<SessionStats>
+  clear(sessionId: string): Promise<boolean>
+  updateGapThreshold(sessionId: string, gapThreshold: number | null): Promise<boolean>
+  getSessions(sessionId: string): Promise<ChatSessionItem[]>
+  getByTimeRange(sessionId: string, startTs: number, endTs: number): Promise<ChatSessionItem[]>
+  getRecent(sessionId: string, limit: number): Promise<ChatSessionItem[]>
+
+  generateSummary(
+    dbSessionId: string,
+    chatSessionId: number,
+    locale?: string,
+    forceRegenerate?: boolean
+  ): Promise<SummaryResult>
+
+  generateSummaries(dbSessionId: string, chatSessionIds: number[], locale?: string): Promise<BatchSummaryResult>
+
+  checkCanGenerateSummary(dbSessionId: string, chatSessionIds: number[]): Promise<Record<number, CanGenerateInfo>>
+}

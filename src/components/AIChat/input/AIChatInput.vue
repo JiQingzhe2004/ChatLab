@@ -7,7 +7,7 @@ import SlashCommandMenu from './SlashCommandMenu.vue'
 import { useSkillStore, type SkillSummary } from '@/stores/skill'
 import type { MentionedMemberContext } from '@/composables/useAIChat'
 import type { MemberWithStats } from '@/types/analysis'
-import { getAdapter } from '@/adapters'
+import { useDataService } from '@/services'
 
 const { t } = useI18n()
 
@@ -158,7 +158,7 @@ async function loadMentionMembers() {
 
   isLoadingMentionMembers.value = true
   try {
-    const members = await getAdapter().getMembers(props.sessionId)
+    const members = await useDataService().getMembers(props.sessionId)
     mentionMembers.value = [...members].sort((a, b) => b.messageCount - a.messageCount)
   } catch (error) {
     console.error('加载 AI @ 成员列表失败:', error)

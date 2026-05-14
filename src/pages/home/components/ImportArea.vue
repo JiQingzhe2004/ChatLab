@@ -9,7 +9,7 @@ import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { getChatlabSiteLocalePath } from '@/utils/chatlabSiteLocale'
 import { useSessionStore, type BatchFileInfo, type MergeFileInfo } from '@/stores/session'
-import { getAdapter } from '@/adapters'
+import { useDataService, useImportService, useSessionIndexService, usePlatformService } from '@/services'
 import { IS_ELECTRON } from '@/utils/platform'
 import DemoImportButton from './DemoImportButton.vue'
 
@@ -37,13 +37,11 @@ const chatSelectorFilePath = ref('')
 const showFormatSelector = ref(false)
 const formatSelectorFilePath = ref('')
 
-// 自动生成会话索引（与 importFileFromPath 保持一致）- Electron only
 async function autoGenerateSessionIndex(sessionId: string) {
-  if (!IS_ELECTRON) return
   try {
     const savedThreshold = localStorage.getItem('sessionGapThreshold')
     const gapThreshold = savedThreshold ? parseInt(savedThreshold, 10) : 1800
-    await window.sessionApi.generate(sessionId, gapThreshold)
+    await useSessionIndexService().generate(sessionId, gapThreshold)
   } catch (error) {
     console.error('自动生成会话索引失败:', error)
   }
@@ -105,7 +103,7 @@ function translateError(error: string): string {
 
 // 根据会话类型导航到对应页面
 async function navigateToSession(sessionId: string) {
-  const session = await getAdapter().getSession(sessionId)
+  const session = await useDataService().getSession(sessionId)
   if (session) {
     const routeName = session.type === 'private' ? 'private-chat' : 'group-chat'
     router.push({ name: routeName, params: { id: sessionId } })
@@ -128,7 +126,7 @@ async function handleClickImport() {
   importDiagnostics.value = null
 
   if (IS_ELECTRON) {
-    const result = await window.api.dialog.showOpenDialog({
+    const result = await usePlatformService().showOpenDialog({
       title: t('home.import.selectFiles'),
       properties: ['openFile', 'multiSelections'],
       filters: [
@@ -158,17 +156,17 @@ async function handleFileDrop({ files, paths }: { files: File[]; paths: string[]
   }
 }
 
-// Web 模式：使用 adapter 导入 File 对象
+// Web 模式：使用 ImportService 导入 File 对象
 async function processWebFiles(files: File[]) {
-  const adapter = getAdapter()
+  const importService = useImportService()
 
   if (files.length === 1) {
     const file = files[0]
 
-    const format = await adapter.detectFormat(file)
+    const format = await importService.detectFormat(file)
     if (format?.multiChat) {
       pendingWebFile.value = file
-      const chats = await adapter.scanMultiChatFile(file)
+      const chats = await importService.scanMultiChatFile(file)
       if (chats.length > 0) {
         webMultiChats.value = chats.map((c) => ({
           index: c.index,
@@ -199,13 +197,11 @@ const pendingWebFile = ref<File | null>(null)
 const webMultiChats = ref<ChatInfo[]>([])
 
 async function importSingleWebFile(file: File, options?: { formatId?: string; chatIndex?: number }) {
-  const adapter = getAdapter()
-
   isImporting.value = true
   importProgress.value = { stage: 'detecting', progress: 0, message: '' }
 
   try {
-    const result = await adapter.importFile(file, options, (p) => {
+    const result = await useImportService().importFile(file, options, (p) => {
       if (p.stage === 'done') return
       importProgress.value = p
     })
@@ -237,8 +233,7 @@ async function processFilePaths(paths: string[]) {
   // 单文件 或 未启用合并导入 - 使用原有逻辑
   if (paths.length === 1 || !mergeImportEnabled.value) {
     if (paths.length === 1) {
-      // 检测是否为多聊天格式（需要弹出聊天选择器）
-      const format = await window.chatApi.detectFormat(paths[0])
+      const format = await useImportService().detectFormat(paths[0])
       if (format?.multiChat) {
         chatSelectorFilePath.value = paths[0]
         showChatSelector.value = true
@@ -300,14 +295,11 @@ async function handleFormatSelect(formatId: string) {
   isImporting.value = true
   importProgress.value = { stage: 'detecting', progress: 0, message: '' }
 
-  const unsubscribe = window.chatApi.onImportProgress((progress) => {
-    if (progress.stage === 'done') return
-    importProgress.value = progress
-  })
-
   try {
-    const result = await window.chatApi.importWithOptions(filePath, { formatId })
-    unsubscribe()
+    const result = await useImportService().importFile(filePath, { formatId }, (progress) => {
+      if (progress.stage === 'done') return
+      importProgress.value = progress
+    })
 
     if (importProgress.value) {
       importProgress.value.progress = 100
@@ -358,14 +350,15 @@ async function handleChatSelect(selectedChats: ChatInfo[]) {
     isImporting.value = true
     importProgress.value = { stage: 'detecting', progress: 0, message: '' }
 
-    const unsubscribe = window.chatApi.onImportProgress((progress) => {
-      if (progress.stage === 'done') return
-      importProgress.value = progress
-    })
-
     try {
-      const result = await window.chatApi.importWithOptions(filePath, { chatIndex: selectedChats[0].index })
-      unsubscribe()
+      const result = await useImportService().importFile(
+        filePath,
+        { chatIndex: selectedChats[0].index },
+        (progress) => {
+          if (progress.stage === 'done') return
+          importProgress.value = progress
+        }
+      )
 
       if (importProgress.value) {
         importProgress.value.progress = 100
@@ -403,14 +396,11 @@ async function handleChatSelect(selectedChats: ChatInfo[]) {
       const chat = selectedChats[i]
       batchFiles.value[i].status = 'importing'
 
-      const unsubscribe = window.chatApi.onImportProgress((progress) => {
-        if (progress.stage === 'done') return
-        batchFiles.value[i].progress = progress
-      })
-
       try {
-        const result = await window.chatApi.importWithOptions(filePath, { chatIndex: chat.index })
-        unsubscribe()
+        const result = await useImportService().importFile(filePath, { chatIndex: chat.index }, (progress) => {
+          if (progress.stage === 'done') return
+          batchFiles.value[i].progress = progress
+        })
 
         if (result.success && result.sessionId) {
           batchFiles.value[i].status = 'success'
@@ -423,7 +413,6 @@ async function handleChatSelect(selectedChats: ChatInfo[]) {
           failedCount++
         }
       } catch (error) {
-        unsubscribe()
         batchFiles.value[i].status = 'failed'
         batchFiles.value[i].error = String(error)
         failedCount++

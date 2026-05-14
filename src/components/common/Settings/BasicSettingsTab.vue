@@ -8,6 +8,7 @@ import { useColorMode } from '@vueuse/core'
 import { availableLocales, type LocaleType } from '@/i18n'
 import NetworkSettingsSection from './NetworkSettingsSection.vue'
 import UITabs from '@/components/UI/Tabs.vue'
+import { usePlatformService } from '@/services'
 import { IS_ELECTRON } from '@/utils/platform'
 
 const { t } = useI18n()
@@ -28,7 +29,7 @@ onMounted(async () => {
     return
   }
   try {
-    const enabled = await window.api.app.getOpenAtLogin()
+    const enabled = await usePlatformService().getOpenAtLogin()
     openAtLogin.value = enabled
   } catch {
     isPackaged.value = false
@@ -37,7 +38,7 @@ onMounted(async () => {
 
 async function handleAutoLaunchChange(enabled: boolean) {
   if (!IS_ELECTRON) return
-  const { success } = await window.api.app.setOpenAtLogin(enabled)
+  const { success } = await usePlatformService().setOpenAtLogin(enabled)
   if (!success) {
     openAtLogin.value = !enabled
     isPackaged.value = false
@@ -90,7 +91,7 @@ watch(
   (val) => {
     if (!IS_ELECTRON) return
     const mode = val === 'auto' ? 'system' : (val as 'light' | 'dark')
-    window.api.setThemeSource(mode)
+    usePlatformService().setThemeSource(mode)
   },
   { immediate: true }
 )

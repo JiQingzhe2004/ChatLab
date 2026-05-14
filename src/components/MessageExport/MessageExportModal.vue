@@ -12,6 +12,7 @@ import { ref, computed, watch, toRaw } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useToast } from '@/composables/useToast'
 import { useSessionStore } from '@/stores/session'
+import { usePlatformService, useAIService } from '@/services'
 import ConditionPanel from './ConditionPanel.vue'
 import SessionPanel from './SessionPanel.vue'
 import PreviewPanel from './PreviewPanel.vue'
@@ -135,7 +136,7 @@ async function executeFilter() {
       const senderIds = rawFilter.senderIds.length > 0 ? [...rawFilter.senderIds] : undefined
       const contextSize = rawFilter.contextSize
 
-      const result = await window.aiApi.filterMessagesWithContext(
+      const result = await useAIService().filterMessagesWithContext(
         sessionId,
         keywords,
         timeFilter,
@@ -148,7 +149,7 @@ async function executeFilter() {
     } else {
       if (selectedSessionIds.value.length === 0) return
       const sessionIds = [...toRaw(selectedSessionIds.value)]
-      const result = await window.aiApi.getMultipleSessionsMessages(sessionId, sessionIds, 1, PAGE_SIZE)
+      const result = await useAIService().getMultipleSessionsMessages(sessionId, sessionIds, 1, PAGE_SIZE)
       filterResult.value = result
     }
   } catch (error) {
@@ -177,7 +178,7 @@ async function loadMoreBlocks() {
       const senderIds = rawFilter.senderIds.length > 0 ? [...rawFilter.senderIds] : undefined
       const contextSize = rawFilter.contextSize
 
-      result = await window.aiApi.filterMessagesWithContext(
+      result = await useAIService().filterMessagesWithContext(
         sessionId,
         keywords,
         timeFilter,
@@ -188,7 +189,7 @@ async function loadMoreBlocks() {
       )
     } else {
       const sessionIds = [...toRaw(selectedSessionIds.value)]
-      result = await window.aiApi.getMultipleSessionsMessages(sessionId, sessionIds, nextPage, PAGE_SIZE)
+      result = await useAIService().getMultipleSessionsMessages(sessionId, sessionIds, nextPage, PAGE_SIZE)
     }
 
     if (result && result.blocks.length > 0) {
@@ -215,7 +216,7 @@ const exportProgress = ref<{
 let unsubscribeExportProgress: (() => void) | null = null
 
 function startExportProgressListener() {
-  unsubscribeExportProgress = window.aiApi.onExportProgress((progress) => {
+  unsubscribeExportProgress = useAIService().onExportProgress((progress) => {
     exportProgress.value = {
       percentage: progress.percentage,
       message: progress.message,
@@ -243,7 +244,7 @@ async function exportFeedPack() {
   const sessionInfo = sessionStore.currentSession
   const sessionName = sessionInfo?.name || '未知会话'
 
-  const dialogResult = await window.api.dialog.showOpenDialog({
+  const dialogResult = await usePlatformService().showOpenDialog({
     title: '选择保存目录',
     properties: ['openDirectory', 'createDirectory'],
   })
@@ -271,7 +272,7 @@ async function exportFeedPack() {
       chatSessionIds: filterMode.value === 'session' ? [...toRaw(selectedSessionIds.value)] : undefined,
     }
 
-    const exportResult = await window.aiApi.exportFilterResultToFile(exportParams)
+    const exportResult = await useAIService().exportFilterResultToFile(exportParams)
 
     if (exportResult.success && exportResult.filePath) {
       toast.success(t('analysis.filter.exportSuccess'), { description: exportResult.filePath })

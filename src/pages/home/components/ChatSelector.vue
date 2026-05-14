@@ -9,6 +9,7 @@
  */
 import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useImportService } from '@/services'
 
 /** 聊天信息通用结构 */
 export interface ChatInfo {
@@ -83,11 +84,11 @@ async function scan() {
   selectedIndexes.value = new Set()
 
   try {
-    const result = await window.chatApi.scanMultiChatFile(props.filePath)
-    if (result.success) {
-      chats.value = result.chats
+    const entries = await useImportService().scanMultiChatFile(props.filePath)
+    if (entries.length > 0) {
+      chats.value = entries
     } else {
-      error.value = result.error || t('home.chatSelector.scanFailed')
+      error.value = t('home.chatSelector.scanFailed')
     }
   } catch (err) {
     error.value = String(err)

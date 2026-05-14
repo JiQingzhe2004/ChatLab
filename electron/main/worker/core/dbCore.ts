@@ -6,6 +6,7 @@
 import Database from 'better-sqlite3'
 import * as fs from 'fs'
 import * as path from 'path'
+import type { DatabaseAdapter, PreparedStatement, RunResult } from '@openchatlab/core'
 
 // 数据库目录（由 Worker 初始化时设置）
 let DB_DIR: string = ''
@@ -138,4 +139,50 @@ export function buildSystemMessageFilter(existingClause: string): string {
   } else {
     return ' WHERE ' + systemFilter
   }
+}
+
+/**
+ * 将 better-sqlite3.Database 实例包装为 DatabaseAdapter 接口
+ */
+export function wrapAsDatabaseAdapter(db: Database.Database): DatabaseAdapter {
+  return {
+    readonly: db.readonly,
+    exec(sql: string) {
+      db.exec(sql)
+    },
+    prepare(sql: string): PreparedStatement {
+      const stmt = db.prepare(sql)
+      return {
+        readonly: stmt.readonly,
+        get(...params: unknown[]) {
+          return stmt.get(...params) as Record<string, unknown> | undefined
+        },
+        all(...params: unknown[]) {
+          return stmt.all(...params) as Record<string, unknown>[]
+        },
+        run(...params: unknown[]): RunResult {
+          const result = stmt.run(...params)
+          return { changes: result.changes, lastInsertRowid: result.lastInsertRowid }
+        },
+      }
+    },
+    transaction<T>(fn: () => T): T {
+      return db.transaction(fn)()
+    },
+    pragma(pragma: string) {
+      return db.pragma(pragma)
+    },
+    close() {
+      db.close()
+    },
+  }
+}
+
+/**
+ * 打开数据库并返回 DatabaseAdapter（用于调用 @openchatlab/core 查询函数）
+ */
+export function openDatabaseAdapter(sessionId: string): DatabaseAdapter | null {
+  const db = openDatabase(sessionId)
+  if (!db) return null
+  return wrapAsDatabaseAdapter(db)
 }

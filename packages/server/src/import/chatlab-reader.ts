@@ -69,10 +69,7 @@ export function detectFormat(filePath: string): 'chatlab-json' | 'chatlab-jsonl'
 /**
  * 解析 ChatLab JSON 格式文件
  */
-export async function parseChatLabJson(
-  filePath: string,
-  onProgress?: ProgressCallback
-): Promise<ParsedData> {
+export async function parseChatLabJson(filePath: string, onProgress?: ProgressCallback): Promise<ParsedData> {
   const raw = fs.readFileSync(filePath, 'utf-8')
   const data = JSON.parse(raw)
 
@@ -100,23 +97,21 @@ export async function parseChatLabJson(
   const rawMessages = data.messages || []
   const totalMessages = rawMessages.length
 
-  const messages: ImportMessage[] = rawMessages.map(
-    (msg: Record<string, unknown>, i: number) => {
-      if (onProgress && i % 10000 === 0) {
-        onProgress(i, totalMessages)
-      }
-      return {
-        platformMessageId: msg.platformMessageId ? String(msg.platformMessageId) : undefined,
-        senderPlatformId: String(msg.sender || ''),
-        senderAccountName: String(msg.accountName || msg.sender || ''),
-        senderGroupNickname: msg.groupNickname ? String(msg.groupNickname) : undefined,
-        timestamp: Number(msg.timestamp),
-        type: Number(msg.type ?? 0),
-        content: msg.content != null ? String(msg.content) : null,
-        replyToMessageId: msg.replyToMessageId ? String(msg.replyToMessageId) : undefined,
-      }
+  const messages: ImportMessage[] = rawMessages.map((msg: Record<string, unknown>, i: number) => {
+    if (onProgress && i % 10000 === 0) {
+      onProgress(i, totalMessages)
     }
-  )
+    return {
+      platformMessageId: msg.platformMessageId ? String(msg.platformMessageId) : undefined,
+      senderPlatformId: String(msg.sender || ''),
+      senderAccountName: String(msg.accountName || msg.sender || ''),
+      senderGroupNickname: msg.groupNickname ? String(msg.groupNickname) : undefined,
+      timestamp: Number(msg.timestamp),
+      type: Number(msg.type ?? 0),
+      content: msg.content != null ? String(msg.content) : null,
+      replyToMessageId: msg.replyToMessageId ? String(msg.replyToMessageId) : undefined,
+    }
+  })
 
   if (onProgress) onProgress(totalMessages, totalMessages)
 
@@ -130,10 +125,7 @@ export async function parseChatLabJson(
 /**
  * 解析 ChatLab JSONL 格式文件
  */
-export async function parseChatLabJsonl(
-  filePath: string,
-  onProgress?: ProgressCallback
-): Promise<ParsedData> {
+export async function parseChatLabJsonl(filePath: string, onProgress?: ProgressCallback): Promise<ParsedData> {
   const meta: ImportMeta = { name: '未知', platform: 'unknown', type: 'group' }
   const members: ImportMember[] = []
   const messages: ImportMessage[] = []
@@ -227,10 +219,7 @@ function collectMembersFromMessages(messages: ImportMessage[], members: ImportMe
 /**
  * 统一入口：自动检测格式并解析
  */
-export async function parseFile(
-  filePath: string,
-  onProgress?: ProgressCallback
-): Promise<ParsedData> {
+export async function parseFile(filePath: string, onProgress?: ProgressCallback): Promise<ParsedData> {
   const format = detectFormat(filePath)
   if (!format) {
     throw new Error(`Unsupported file format: ${filePath}. Only ChatLab JSON (.json) and JSONL (.jsonl) are supported.`)

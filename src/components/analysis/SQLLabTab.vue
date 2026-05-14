@@ -3,7 +3,7 @@ import { ref, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { SchemaPanel, AIHistoryModal, ResultTable, getTableLabel, getColumnLabel } from './SQLLab'
 import type { AIHistory, SQLResult, TableSchema } from './SQLLab'
-import { getAdapter } from '@/adapters'
+import { useDataService } from '@/services'
 
 const { t, locale } = useI18n()
 
@@ -98,7 +98,7 @@ async function executeSQL() {
   resultTableRef.value?.resetSort()
 
   try {
-    result.value = await getAdapter().executeSQL(props.sessionId, sql.value)
+    result.value = await useDataService().executeSQL(props.sessionId, sql.value)
   } catch (err: any) {
     error.value = err.message || String(err)
   } finally {

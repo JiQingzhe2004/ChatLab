@@ -2,7 +2,7 @@
 import { ref, watch, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { LanguagePreferenceResult } from '@/types/quotes/languagePreference'
-import { getAdapter } from '@/adapters'
+import { useDataService } from '@/services'
 import { LoadingState, EmptyState } from '@/components/UI'
 import { useLayoutStore } from '@/stores/layout'
 import LanguagePreferenceCard from './LanguagePreferenceCard.vue'
@@ -29,7 +29,7 @@ async function loadData() {
   if (!props.sessionId) return
   isLoading.value = true
   try {
-    data.value = await getAdapter().getLanguagePreferenceAnalysis(props.sessionId, locale.value, props.timeFilter)
+    data.value = await useDataService().getLanguagePreferenceAnalysis(props.sessionId, locale.value, props.timeFilter)
   } catch (error) {
     console.error('[LanguagePreferenceTab] Failed to load:', error)
   } finally {

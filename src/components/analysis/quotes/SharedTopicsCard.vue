@@ -5,7 +5,7 @@ import { ThemeCard } from '@/components/UI'
 import { useSettingsStore } from '@/stores/settings'
 import type { SharedWord } from '@/types/quotes/languagePreference'
 import type { MemberWithStats } from '@/types/analysis'
-import { getAdapter } from '@/adapters'
+import { useDataService } from '@/services'
 import type { TimeFilter } from '@openchatlab/shared-types'
 
 const { t } = useI18n()
@@ -49,7 +49,7 @@ async function loadSharedWords() {
 
   try {
     if (memberList.value.length === 0) {
-      memberList.value = await getAdapter().getMembers(props.sessionId)
+      memberList.value = await useDataService().getMembers(props.sessionId)
     }
     const topTwo = [...memberList.value].sort((a, b) => b.messageCount - a.messageCount).slice(0, 2)
     if (topTwo.length < 2) {

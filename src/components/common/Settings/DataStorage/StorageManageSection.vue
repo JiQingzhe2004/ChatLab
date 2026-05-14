@@ -5,6 +5,7 @@
  */
 import { ref, onMounted, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { usePlatformService } from '@/services'
 
 const { t } = useI18n()
 
@@ -178,7 +179,7 @@ async function applyDataDirChange(newDir: string | null, migrate: boolean) {
 
 // 重启应用
 async function relaunchApp() {
-  await window.api.app.relaunch()
+  await usePlatformService().relaunch()
 }
 
 // 组件挂载时加载数据

@@ -3,7 +3,7 @@ import { ref, computed, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { MemberWithStats } from '@/types/analysis'
 import OwnerSelector from '@/components/analysis/member/OwnerSelector.vue'
-import { getAdapter } from '@/adapters'
+import { useDataService } from '@/services'
 
 const { t } = useI18n()
 
@@ -72,7 +72,7 @@ async function loadMembers() {
   if (!props.sessionId) return
   isLoading.value = true
   try {
-    members.value = await getAdapter().getMembers(props.sessionId)
+    members.value = await useDataService().getMembers(props.sessionId)
   } catch (error) {
     console.error('加载成员列表失败:', error)
   } finally {
@@ -90,7 +90,7 @@ async function updateAliases(member: MemberWithStats, newAliases: string[]) {
 
   savingAliasesId.value = member.id
   try {
-    const success = await getAdapter().updateMemberAliases(props.sessionId, member.id, aliasesToSave)
+    const success = await useDataService().updateMemberAliases(props.sessionId, member.id, aliasesToSave)
     if (success) {
       const idx = members.value.findIndex((m) => m.id === member.id)
       if (idx !== -1) {
@@ -130,7 +130,7 @@ async function confirmMerge() {
   if (!mergePlan.value) return
   isMerging.value = true
   try {
-    const success = await getAdapter().mergeMembers(
+    const success = await useDataService().mergeMembers(
       props.sessionId,
       mergePlan.value.primary.id,
       mergePlan.value.secondary.id

@@ -7,17 +7,8 @@ import { ref, computed, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useToast } from '@/composables/useToast'
 import { useVirtualizer } from '@tanstack/vue-virtual'
+import { useSessionIndexService, type ChatSessionItem } from '@/services'
 import BatchSummaryModal from './BatchSummaryModal.vue'
-
-interface ChatSessionItem {
-  id: number
-  startTs: number
-  endTs: number
-  messageCount: number
-  firstMessageId: number
-  /** 会话摘要（如果有） */
-  summary?: string | null
-}
 
 // 扁平化列表项类型
 type FlatListItem =
@@ -189,7 +180,7 @@ async function loadSessions() {
 
   isLoading.value = true
   try {
-    const data = await window.sessionApi.getSessions(props.sessionId)
+    const data = await useSessionIndexService().getSessions(props.sessionId)
     allSessions.value = data
     // 滚动到底部（最新会话在下面）
     await nextTick()
@@ -238,7 +229,7 @@ async function generateSummary(session: ChatSessionItem, event: Event) {
 
   try {
     console.log('[SessionTimeline] 调用 IPC...')
-    const result = await window.sessionApi.generateSummary(props.sessionId, session.id, locale.value)
+    const result = await useSessionIndexService().generateSummary(props.sessionId, session.id, locale.value)
     console.log('[SessionTimeline] IPC 返回:', result)
 
     if (result.success && result.summary) {

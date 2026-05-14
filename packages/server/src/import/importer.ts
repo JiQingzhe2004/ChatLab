@@ -97,8 +97,16 @@ function fullImport(
       for (const msg of batch) {
         let senderId = memberIdMap.get(msg.senderPlatformId)
         if (!senderId) {
-          insertMember.run(msg.senderPlatformId, msg.senderAccountName || msg.senderPlatformId, msg.senderGroupNickname || null, null, '[]')
-          senderId = (db.prepare('SELECT id FROM member WHERE platform_id = ?').get(msg.senderPlatformId) as { id: number })?.id
+          insertMember.run(
+            msg.senderPlatformId,
+            msg.senderAccountName || msg.senderPlatformId,
+            msg.senderGroupNickname || null,
+            null,
+            '[]'
+          )
+          senderId = (
+            db.prepare('SELECT id FROM member WHERE platform_id = ?').get(msg.senderPlatformId) as { id: number }
+          )?.id
           if (senderId) memberIdMap.set(msg.senderPlatformId, senderId)
         }
         if (!senderId) {
@@ -188,9 +196,7 @@ function incrementalImport(
     `INSERT INTO message (sender_id, sender_account_name, sender_group_nickname, ts, type, content, reply_to_message_id, platform_message_id)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
   )
-  const insertMemberMinimal = db.prepare(
-    `INSERT OR IGNORE INTO member (platform_id, account_name) VALUES (?, ?)`
-  )
+  const insertMemberMinimal = db.prepare(`INSERT OR IGNORE INTO member (platform_id, account_name) VALUES (?, ?)`)
 
   let written = 0
   let duplicates = 0
@@ -208,7 +214,9 @@ function incrementalImport(
         let senderId = memberIdMap.get(msg.senderPlatformId)
         if (!senderId) {
           insertMemberMinimal.run(msg.senderPlatformId, msg.senderAccountName || msg.senderPlatformId)
-          senderId = (db.prepare('SELECT id FROM member WHERE platform_id = ?').get(msg.senderPlatformId) as { id: number })?.id
+          senderId = (
+            db.prepare('SELECT id FROM member WHERE platform_id = ?').get(msg.senderPlatformId) as { id: number }
+          )?.id
           if (senderId) memberIdMap.set(msg.senderPlatformId, senderId)
         }
         if (!senderId) continue
@@ -228,7 +236,9 @@ function incrementalImport(
     })
 
     if (onProgress && (i + BATCH) % 50000 < BATCH) {
-      onProgress(`已处理 ${Math.min(i + BATCH, data.messages.length)} / ${data.messages.length} 条消息 (新增 ${written}, 重复 ${duplicates})`)
+      onProgress(
+        `已处理 ${Math.min(i + BATCH, data.messages.length)} / ${data.messages.length} 条消息 (新增 ${written}, 重复 ${duplicates})`
+      )
     }
   }
 
@@ -284,7 +294,9 @@ function insertFtsEntries(db: DatabaseAdapter, onProgress?: (msg: string) => voi
     return
   }
 
-  const hasFts = db.prepare("SELECT COUNT(*) as cnt FROM sqlite_master WHERE type='table' AND name='message_fts'").get() as { cnt: number }
+  const hasFts = db
+    .prepare("SELECT COUNT(*) as cnt FROM sqlite_master WHERE type='table' AND name='message_fts'")
+    .get() as { cnt: number }
   if (!hasFts || hasFts.cnt === 0) return
 
   onProgress?.('更新全文搜索索引...')
@@ -318,7 +330,16 @@ export async function importData(
   if (options?.dryRun) {
     if (exists) {
       const db = dbManager.open(sessionId)
-      if (!db) return { success: false, sessionId, created: false, messageCount: 0, memberCount: 0, duplicateCount: 0, error: 'Failed to open database' }
+      if (!db)
+        return {
+          success: false,
+          sessionId,
+          created: false,
+          messageCount: 0,
+          memberCount: 0,
+          duplicateCount: 0,
+          error: 'Failed to open database',
+        }
 
       const existingCount = (db.prepare('SELECT COUNT(*) as cnt FROM message').get() as { cnt: number }).cnt
       return {
@@ -363,10 +384,30 @@ export async function importData(
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err)
     if (!exists) {
-      try { fs.unlinkSync(dbPath) } catch { /* ignore */ }
-      try { fs.unlinkSync(dbPath + '-wal') } catch { /* ignore */ }
-      try { fs.unlinkSync(dbPath + '-shm') } catch { /* ignore */ }
+      try {
+        fs.unlinkSync(dbPath)
+      } catch {
+        /* ignore */
+      }
+      try {
+        fs.unlinkSync(dbPath + '-wal')
+      } catch {
+        /* ignore */
+      }
+      try {
+        fs.unlinkSync(dbPath + '-shm')
+      } catch {
+        /* ignore */
+      }
     }
-    return { success: false, sessionId, created: false, messageCount: 0, memberCount: 0, duplicateCount: 0, error: message }
+    return {
+      success: false,
+      sessionId,
+      created: false,
+      messageCount: 0,
+      memberCount: 0,
+      duplicateCount: 0,
+      error: message,
+    }
   }
 }

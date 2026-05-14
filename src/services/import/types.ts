@@ -1,0 +1,123 @@
+/**
+ * ImportAdapter — 导入领域的适配器接口
+ *
+ * 涵盖：文件导入、格式检测、Demo 导入、增量导入
+ * Electron 通过 window.chatApi IPC 实现，Web 通过 HTTP + SSE 实现。
+ */
+
+import type { ImportProgress } from '@/types/base'
+
+// ==================== 导入选项 ====================
+
+export interface ImportOptions {
+  formatId?: string
+  chatIndex?: number
+}
+
+// ==================== 导入结果 ====================
+
+export interface ImportResult {
+  success: boolean
+  sessionId?: string
+  error?: string
+  messageCount?: number
+  memberCount?: number
+  diagnostics?: ImportDiagnosticsInfo
+}
+
+export interface ImportDiagnosticsInfo {
+  logFile: string | null
+  detectedFormat: string | null
+  messagesReceived: number
+  messagesWritten: number
+  messagesSkipped: number
+  skipReasons: {
+    noSenderId: number
+    noAccountName: number
+    invalidTimestamp: number
+    noType: number
+  }
+}
+
+// ==================== 格式信息 ====================
+
+export interface FormatInfo {
+  id: string
+  name: string
+  platform: string
+  extensions: string[]
+  multiChat?: boolean
+}
+
+export interface MultiChatEntry {
+  index: number
+  name: string
+  type: string
+  id: number
+  messageCount: number
+}
+
+// ==================== Demo 导入 ====================
+
+export interface DemoProgress {
+  stage: 'downloading' | 'importing'
+}
+
+export interface DemoImportResult {
+  success: boolean
+  groupSessionId?: string
+  privateSessionId?: string
+  error?: string
+}
+
+// ==================== 增量导入 ====================
+
+export interface IncrementalAnalysis {
+  newMessageCount: number
+  duplicateCount: number
+  totalInFile: number
+  error?: string
+}
+
+export interface IncrementalImportResult {
+  success: boolean
+  newMessageCount: number
+  error?: string
+}
+
+// ==================== 核心接口 ====================
+
+export interface ImportAdapter {
+  /**
+   * 导入文件。Electron 接受 File 或文件路径，Web 只接受 File。
+   */
+  importFile(
+    file: File | string,
+    options?: ImportOptions,
+    onProgress?: (p: ImportProgress) => void
+  ): Promise<ImportResult>
+
+  /** 检测文件格式 */
+  detectFormat(file: File | string): Promise<FormatInfo | null>
+
+  /** 扫描包含多个聊天的文件 */
+  scanMultiChatFile(file: File | string): Promise<MultiChatEntry[]>
+
+  /** 获取支持的导入格式列表 */
+  getSupportedFormats(): Promise<FormatInfo[]>
+
+  /** 导入 Demo 数据 */
+  importDemo(locale: string, onProgress?: (p: DemoProgress) => void): Promise<DemoImportResult>
+
+  /** 分析增量导入（预览去重后可新增多少消息） */
+  analyzeIncrementalImport(sessionId: string, file: File | string): Promise<IncrementalAnalysis>
+
+  /** 执行增量导入 */
+  incrementalImport(
+    sessionId: string,
+    file: File | string,
+    onProgress?: (p: ImportProgress) => void
+  ): Promise<IncrementalImportResult>
+}
+
+export type { ImportProgress }

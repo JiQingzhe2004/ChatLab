@@ -21,9 +21,20 @@ import {
   getDailyActivity,
   getWeekdayActivity,
   getMessageTypeStats,
+  getMonthlyActivity,
+  getYearlyActivity,
+  getMessageLengthDistribution,
   getDatabaseSchema,
   executeReadonlySql,
+  getRelationshipStats,
+  getCatchphraseAnalysis,
+  getMentionAnalysis,
+  getMentionGraph,
+  getLaughAnalysis,
+  getClusterGraph,
+  getLanguagePreferenceAnalysis,
 } from '@openchatlab/core'
+import { createJiebaNlpProvider } from '@openchatlab/node-runtime'
 import { streamImport, detectFormat, detectAllFormats, getSupportedFormats, scanMultiChatFile } from '../../import'
 
 function resolveNativeBinding(): string | undefined {
@@ -351,6 +362,101 @@ export function registerWebRoutes(server: FastifyInstance, dbManager: DatabaseMa
       return history
     }
   )
+
+  // ==================== 高级分析（analytics） ====================
+
+  server.get<{
+    Params: { id: string }
+    Querystring: { startTs?: string; endTs?: string; memberId?: string }
+  }>('/_web/sessions/:id/analytics/relationship', async (request) => {
+    const db = ensureDb(dbManager, request.params.id)
+    const filter = parseTimeFilter(request.query)
+    return getRelationshipStats(db, filter)
+  })
+
+  server.get<{
+    Params: { id: string }
+    Querystring: { startTs?: string; endTs?: string; memberId?: string }
+  }>('/_web/sessions/:id/analytics/catchphrase', async (request) => {
+    const db = ensureDb(dbManager, request.params.id)
+    const filter = parseTimeFilter(request.query)
+    return getCatchphraseAnalysis(db, filter)
+  })
+
+  server.get<{
+    Params: { id: string }
+    Querystring: { startTs?: string; endTs?: string; memberId?: string }
+  }>('/_web/sessions/:id/analytics/mention', async (request) => {
+    const db = ensureDb(dbManager, request.params.id)
+    const filter = parseTimeFilter(request.query)
+    return getMentionAnalysis(db, filter)
+  })
+
+  server.get<{
+    Params: { id: string }
+    Querystring: { startTs?: string; endTs?: string; memberId?: string }
+  }>('/_web/sessions/:id/analytics/mention-graph', async (request) => {
+    const db = ensureDb(dbManager, request.params.id)
+    const filter = parseTimeFilter(request.query)
+    return getMentionGraph(db, filter)
+  })
+
+  server.get<{
+    Params: { id: string }
+    Querystring: { startTs?: string; endTs?: string; memberId?: string }
+  }>('/_web/sessions/:id/analytics/laugh', async (request) => {
+    const db = ensureDb(dbManager, request.params.id)
+    const filter = parseTimeFilter(request.query)
+    return getLaughAnalysis(db, filter)
+  })
+
+  server.get<{
+    Params: { id: string }
+    Querystring: { startTs?: string; endTs?: string; memberId?: string; topEdges?: string }
+  }>('/_web/sessions/:id/analytics/cluster', async (request) => {
+    const db = ensureDb(dbManager, request.params.id)
+    const filter = parseTimeFilter(request.query)
+    const topEdges = request.query.topEdges ? parseInt(request.query.topEdges, 10) : undefined
+    return getClusterGraph(db, filter, topEdges ? { topEdges } : undefined)
+  })
+
+  server.get<{
+    Params: { id: string }
+    Querystring: { startTs?: string; endTs?: string; memberId?: string; locale?: string }
+  }>('/_web/sessions/:id/analytics/language-preference', async (request) => {
+    const db = ensureDb(dbManager, request.params.id)
+    const filter = parseTimeFilter(request.query)
+    const locale = request.query.locale || 'zh-CN'
+    const nlpProvider = createJiebaNlpProvider()
+    return getLanguagePreferenceAnalysis(db, { locale, timeFilter: filter, nlpProvider })
+  })
+
+  server.get<{
+    Params: { id: string }
+    Querystring: { startTs?: string; endTs?: string; memberId?: string }
+  }>('/_web/sessions/:id/analytics/monthly-activity', async (request) => {
+    const db = ensureDb(dbManager, request.params.id)
+    const filter = parseTimeFilter(request.query)
+    return getMonthlyActivity(db, filter)
+  })
+
+  server.get<{
+    Params: { id: string }
+    Querystring: { startTs?: string; endTs?: string; memberId?: string }
+  }>('/_web/sessions/:id/analytics/yearly-activity', async (request) => {
+    const db = ensureDb(dbManager, request.params.id)
+    const filter = parseTimeFilter(request.query)
+    return getYearlyActivity(db, filter)
+  })
+
+  server.get<{
+    Params: { id: string }
+    Querystring: { startTs?: string; endTs?: string; memberId?: string }
+  }>('/_web/sessions/:id/analytics/message-length-distribution', async (request) => {
+    const db = ensureDb(dbManager, request.params.id)
+    const filter = parseTimeFilter(request.query)
+    return getMessageLengthDistribution(db, filter)
+  })
 
   // ==================== SQL Lab ====================
 

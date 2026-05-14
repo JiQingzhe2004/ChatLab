@@ -44,10 +44,7 @@ export interface QueryMessagesResult {
  * 通用分页消息查询
  * 支持关键词、时间范围、发送者过滤
  */
-export function queryMessages(
-  db: DatabaseAdapter,
-  options?: QueryMessagesOptions
-): QueryMessagesResult {
+export function queryMessages(db: DatabaseAdapter, options?: QueryMessagesOptions): QueryMessagesResult {
   const limit = Math.min(1000, Math.max(1, options?.limit ?? 100))
   const offset = options?.offset ?? 0
   const page = Math.floor(offset / limit) + 1
@@ -193,10 +190,7 @@ export function searchMessagesLike(
 /**
  * 获取最近 N 条消息
  */
-export function getRecentMessages(
-  db: DatabaseAdapter,
-  options?: { limit?: number }
-): MessageResult[] {
+export function getRecentMessages(db: DatabaseAdapter, options?: { limit?: number }): MessageResult[] {
   const limit = options?.limit ?? 50
 
   const rows = db

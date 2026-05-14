@@ -6,6 +6,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { useAssistantStore } from './assistant'
+import { usePlatformService } from '@/services'
 
 import { CHATLAB_SITE_BASE } from '@/utils/chatlabSiteLocale'
 const CLOUD_MARKET_BASE_URL = CHATLAB_SITE_BASE
@@ -134,7 +135,7 @@ export const useSkillStore = defineStore('skill', () => {
     cloudError.value = null
 
     try {
-      const result = await window.api.app.fetchRemoteConfig(url)
+      const result = await usePlatformService().fetchRemoteConfig(url)
       if (!result.success || !result.data) {
         cloudError.value = result.error || 'Failed to fetch cloud catalog'
         cloudCatalog.value = []
@@ -161,7 +162,7 @@ export const useSkillStore = defineStore('skill', () => {
     const mdUrl = `${CLOUD_MARKET_BASE_URL}${item.path}`
 
     try {
-      const mdResult = await window.api.app.fetchRemoteConfig(mdUrl)
+      const mdResult = await usePlatformService().fetchRemoteConfig(mdUrl)
       if (!mdResult.success || typeof mdResult.data !== 'string') {
         return { success: false, error: mdResult.error || 'Failed to fetch skill content' }
       }

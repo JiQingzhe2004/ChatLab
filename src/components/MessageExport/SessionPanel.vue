@@ -9,6 +9,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useSessionStore } from '@/stores/session'
 import { useVirtualizer } from '@tanstack/vue-virtual'
+import { useSessionIndexService } from '@/services'
 
 const { t } = useI18n()
 const sessionStore = useSessionStore()
@@ -100,7 +101,7 @@ async function loadSessions() {
 
   isLoading.value = true
   try {
-    sessions.value = await window.sessionApi.getSessions(sessionId)
+    sessions.value = await useSessionIndexService().getSessions(sessionId)
   } catch (error) {
     console.error('加载会话失败:', error)
   } finally {

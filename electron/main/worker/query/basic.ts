@@ -1,313 +1,76 @@
 /**
  * 基础查询模块
- * 提供活跃度、时段分布等基础统计查询
+ * 查询逻辑委托给 @openchatlab/core，本模块负责数据库连接管理和成员 DDL 迁移
  */
 
 import Database from 'better-sqlite3'
 import * as fs from 'fs'
-import {
-  openDatabase,
-  closeDatabase,
-  getDbPath,
-  getCacheDir,
-  buildTimeFilter,
-  buildSystemMessageFilter,
-  type TimeFilter,
-} from '../core'
+import { openDatabase, closeDatabase, getDbPath, getCacheDir, openDatabaseAdapter, type TimeFilter } from '../core'
 import { getCache, CACHE_KEY_OVERVIEW, type OverviewCache } from '../../database/sessionCache'
+import {
+  getAvailableYears as coreGetAvailableYears,
+  getMemberActivity as coreGetMemberActivity,
+  getHourlyActivity as coreGetHourlyActivity,
+  getDailyActivity as coreGetDailyActivity,
+  getWeekdayActivity as coreGetWeekdayActivity,
+  getMonthlyActivity as coreGetMonthlyActivity,
+  getYearlyActivity as coreGetYearlyActivity,
+  getMessageTypeStats as coreGetMessageTypeStats,
+  getMessageLengthDistribution as coreGetMessageLengthDistribution,
+  getTimeRange as coreGetTimeRange,
+} from '@openchatlab/core'
 
-// ==================== 基础查询 ====================
+// ==================== 基础查询（委托给 core） ====================
 
-/**
- * 获取可用的年份列表
- */
 export function getAvailableYears(sessionId: string): number[] {
-  const db = openDatabase(sessionId)
+  const db = openDatabaseAdapter(sessionId)
   if (!db) return []
-
-  const rows = db
-    .prepare(
-      `
-      SELECT DISTINCT CAST(strftime('%Y', ts, 'unixepoch', 'localtime') AS INTEGER) as year
-      FROM message
-      ORDER BY year DESC
-    `
-    )
-    .all() as Array<{ year: number }>
-
-  return rows.map((r) => r.year)
+  return coreGetAvailableYears(db)
 }
 
-/**
- * 获取成员活跃度排行
- */
 export function getMemberActivity(sessionId: string, filter?: TimeFilter): any[] {
-  // 先确保数据库有 avatar 字段（兼容旧数据库）
   ensureAvatarColumn(sessionId)
-
-  const db = openDatabase(sessionId)
+  const db = openDatabaseAdapter(sessionId)
   if (!db) return []
-
-  const { clause, params } = buildTimeFilter(filter)
-
-  const msgFilterBase = clause ? clause.replace('WHERE', 'AND') : ''
-  const msgFilterWithSystem = msgFilterBase + " AND COALESCE(m.account_name, '') != '系统消息'"
-
-  const totalClauseWithSystem = buildSystemMessageFilter(clause)
-  const totalMessages = (
-    db
-      .prepare(
-        `SELECT COUNT(*) as count
-         FROM message msg
-         JOIN member m ON msg.sender_id = m.id
-         ${totalClauseWithSystem}`
-      )
-      .get(...params) as { count: number }
-  ).count
-
-  const rows = db
-    .prepare(
-      `
-      SELECT
-        m.id as memberId,
-        m.platform_id as platformId,
-        COALESCE(m.group_nickname, m.account_name, m.platform_id) as name,
-        m.avatar as avatar,
-        COUNT(msg.id) as messageCount
-      FROM member m
-      LEFT JOIN message msg ON m.id = msg.sender_id ${msgFilterWithSystem}
-      WHERE COALESCE(m.account_name, '') != '系统消息'
-      GROUP BY m.id
-      HAVING messageCount > 0
-      ORDER BY messageCount DESC
-    `
-    )
-    .all(...params) as Array<{
-    memberId: number
-    platformId: string
-    name: string
-    avatar: string | null
-    messageCount: number
-  }>
-
-  return rows.map((row) => ({
-    memberId: row.memberId,
-    platformId: row.platformId,
-    name: row.name,
-    avatar: row.avatar,
-    messageCount: row.messageCount,
-    percentage: totalMessages > 0 ? Math.round((row.messageCount / totalMessages) * 10000) / 100 : 0,
-  }))
+  return coreGetMemberActivity(db, filter)
 }
 
-/**
- * 获取每小时活跃度分布
- */
 export function getHourlyActivity(sessionId: string, filter?: TimeFilter): any[] {
-  const db = openDatabase(sessionId)
+  const db = openDatabaseAdapter(sessionId)
   if (!db) return []
-
-  const { clause, params } = buildTimeFilter(filter)
-  const clauseWithSystem = buildSystemMessageFilter(clause)
-
-  const rows = db
-    .prepare(
-      `
-      SELECT
-        CAST(strftime('%H', msg.ts, 'unixepoch', 'localtime') AS INTEGER) as hour,
-        COUNT(*) as messageCount
-      FROM message msg
-      JOIN member m ON msg.sender_id = m.id
-      ${clauseWithSystem}
-      GROUP BY hour
-      ORDER BY hour
-    `
-    )
-    .all(...params) as Array<{ hour: number; messageCount: number }>
-
-  const result: any[] = []
-  for (let h = 0; h < 24; h++) {
-    const found = rows.find((r) => r.hour === h)
-    result.push({
-      hour: h,
-      messageCount: found ? found.messageCount : 0,
-    })
-  }
-
-  return result
+  return coreGetHourlyActivity(db, filter)
 }
 
-/**
- * 获取每日活跃度趋势
- */
 export function getDailyActivity(sessionId: string, filter?: TimeFilter): any[] {
-  const db = openDatabase(sessionId)
+  const db = openDatabaseAdapter(sessionId)
   if (!db) return []
-
-  const { clause, params } = buildTimeFilter(filter)
-  const clauseWithSystem = buildSystemMessageFilter(clause)
-
-  const rows = db
-    .prepare(
-      `
-      SELECT
-        strftime('%Y-%m-%d', msg.ts, 'unixepoch', 'localtime') as date,
-        COUNT(*) as messageCount
-      FROM message msg
-      JOIN member m ON msg.sender_id = m.id
-      ${clauseWithSystem}
-      GROUP BY date
-      ORDER BY date
-    `
-    )
-    .all(...params) as Array<{ date: string; messageCount: number }>
-
-  return rows
+  return coreGetDailyActivity(db, filter)
 }
 
-/**
- * 获取星期活跃度分布
- */
 export function getWeekdayActivity(sessionId: string, filter?: TimeFilter): any[] {
-  const db = openDatabase(sessionId)
+  const db = openDatabaseAdapter(sessionId)
   if (!db) return []
-
-  const { clause, params } = buildTimeFilter(filter)
-  const clauseWithSystem = buildSystemMessageFilter(clause)
-
-  const rows = db
-    .prepare(
-      `
-      SELECT
-        CASE
-          WHEN CAST(strftime('%w', msg.ts, 'unixepoch', 'localtime') AS INTEGER) = 0 THEN 7
-          ELSE CAST(strftime('%w', msg.ts, 'unixepoch', 'localtime') AS INTEGER)
-        END as weekday,
-        COUNT(*) as messageCount
-      FROM message msg
-      JOIN member m ON msg.sender_id = m.id
-      ${clauseWithSystem}
-      GROUP BY weekday
-      ORDER BY weekday
-    `
-    )
-    .all(...params) as Array<{ weekday: number; messageCount: number }>
-
-  const result: any[] = []
-  for (let w = 1; w <= 7; w++) {
-    const found = rows.find((r) => r.weekday === w)
-    result.push({
-      weekday: w,
-      messageCount: found ? found.messageCount : 0,
-    })
-  }
-
-  return result
+  return coreGetWeekdayActivity(db, filter)
 }
 
-/**
- * 获取月份活跃度分布
- */
 export function getMonthlyActivity(sessionId: string, filter?: TimeFilter): any[] {
-  const db = openDatabase(sessionId)
+  const db = openDatabaseAdapter(sessionId)
   if (!db) return []
-
-  const { clause, params } = buildTimeFilter(filter)
-  const clauseWithSystem = buildSystemMessageFilter(clause)
-
-  const rows = db
-    .prepare(
-      `
-      SELECT
-        CAST(strftime('%m', msg.ts, 'unixepoch', 'localtime') AS INTEGER) as month,
-        COUNT(*) as messageCount
-      FROM message msg
-      JOIN member m ON msg.sender_id = m.id
-      ${clauseWithSystem}
-      GROUP BY month
-      ORDER BY month
-    `
-    )
-    .all(...params) as Array<{ month: number; messageCount: number }>
-
-  const result: any[] = []
-  for (let m = 1; m <= 12; m++) {
-    const found = rows.find((r) => r.month === m)
-    result.push({
-      month: m,
-      messageCount: found ? found.messageCount : 0,
-    })
-  }
-
-  return result
+  return coreGetMonthlyActivity(db, filter)
 }
 
-/**
- * 获取年份活跃度分布
- */
 export function getYearlyActivity(sessionId: string, filter?: TimeFilter): any[] {
-  const db = openDatabase(sessionId)
+  const db = openDatabaseAdapter(sessionId)
   if (!db) return []
-
-  const { clause, params } = buildTimeFilter(filter)
-  const clauseWithSystem = buildSystemMessageFilter(clause)
-
-  const rows = db
-    .prepare(
-      `
-      SELECT
-        CAST(strftime('%Y', msg.ts, 'unixepoch', 'localtime') AS INTEGER) as year,
-        COUNT(*) as messageCount
-      FROM message msg
-      JOIN member m ON msg.sender_id = m.id
-      ${clauseWithSystem}
-      GROUP BY year
-      ORDER BY year
-    `
-    )
-    .all(...params) as Array<{ year: number; messageCount: number }>
-
-  return rows.map((r) => ({
-    year: r.year,
-    messageCount: r.messageCount,
-  }))
+  return coreGetYearlyActivity(db, filter)
 }
 
-/**
- * 获取消息类型分布
- */
 export function getMessageTypeDistribution(sessionId: string, filter?: TimeFilter): any[] {
-  const db = openDatabase(sessionId)
+  const db = openDatabaseAdapter(sessionId)
   if (!db) return []
-
-  const { clause, params } = buildTimeFilter(filter)
-  const clauseWithSystem = buildSystemMessageFilter(clause)
-
-  const rows = db
-    .prepare(
-      `
-      SELECT msg.type, COUNT(*) as count
-      FROM message msg
-      JOIN member m ON msg.sender_id = m.id
-      ${clauseWithSystem}
-      GROUP BY msg.type
-      ORDER BY count DESC
-    `
-    )
-    .all(...params) as Array<{ type: number; count: number }>
-
-  return rows.map((r) => ({
-    type: r.type,
-    count: r.count,
-  }))
+  return coreGetMessageTypeStats(db, filter)
 }
 
-/**
- * 获取消息长度分布（仅统计文字消息）
- * 返回两组数据：
- * - detail: 1-25 字逐字分布
- * - grouped: 5-100+ 每5字一组
- */
 export function getMessageLengthDistribution(
   sessionId: string,
   filter?: TimeFilter
@@ -315,93 +78,19 @@ export function getMessageLengthDistribution(
   detail: Array<{ len: number; count: number }>
   grouped: Array<{ range: string; count: number }>
 } {
-  const db = openDatabase(sessionId)
+  const db = openDatabaseAdapter(sessionId)
   if (!db) return { detail: [], grouped: [] }
-
-  const { clause, params } = buildTimeFilter(filter)
-  const clauseWithSystem = buildSystemMessageFilter(clause)
-
-  // 只统计文字消息 (type = 0)，并且 content 不为空
-  const typeCondition = clauseWithSystem
-    ? clauseWithSystem + ' AND msg.type = 0 AND msg.content IS NOT NULL AND LENGTH(msg.content) > 0'
-    : 'WHERE msg.type = 0 AND msg.content IS NOT NULL AND LENGTH(msg.content) > 0'
-
-  // 直接获取每条消息的长度
-  const rows = db
-    .prepare(
-      `
-      SELECT LENGTH(msg.content) as len, COUNT(*) as count
-      FROM message msg
-      JOIN member m ON msg.sender_id = m.id
-      ${typeCondition}
-      GROUP BY len
-      ORDER BY len
-    `
-    )
-    .all(...params) as Array<{ len: number; count: number }>
-
-  // 构建 detail：1-25 逐字
-  const detail: Array<{ len: number; count: number }> = []
-  for (let i = 1; i <= 25; i++) {
-    const found = rows.find((r) => r.len === i)
-    detail.push({
-      len: i,
-      count: found ? found.count : 0,
-    })
-  }
-
-  // 构建 grouped：每5字一段
-  const ranges5 = [
-    { min: 1, max: 5, label: '1-5' },
-    { min: 6, max: 10, label: '6-10' },
-    { min: 11, max: 15, label: '11-15' },
-    { min: 16, max: 20, label: '16-20' },
-    { min: 21, max: 25, label: '21-25' },
-    { min: 26, max: 30, label: '26-30' },
-    { min: 31, max: 35, label: '31-35' },
-    { min: 36, max: 40, label: '36-40' },
-    { min: 41, max: 45, label: '41-45' },
-    { min: 46, max: 50, label: '46-50' },
-    { min: 51, max: 60, label: '51-60' },
-    { min: 61, max: 70, label: '61-70' },
-    { min: 71, max: 80, label: '71-80' },
-    { min: 81, max: 100, label: '81-100' },
-    { min: 101, max: Infinity, label: '100+' },
-  ]
-
-  const grouped: Array<{ range: string; count: number }> = []
-  for (const r of ranges5) {
-    const count = rows.filter((row) => row.len >= r.min && row.len <= r.max).reduce((sum, row) => sum + row.count, 0)
-    grouped.push({
-      range: r.label,
-      count,
-    })
-  }
-
-  return { detail, grouped }
+  return coreGetMessageLengthDistribution(db, filter)
 }
 
-/**
- * 获取时间范围
- */
 export function getTimeRange(sessionId: string): { start: number; end: number } | null {
-  // 优先从缓存读取
   const overview = getCache<OverviewCache>(sessionId, CACHE_KEY_OVERVIEW, getCacheDir())
   if (overview?.firstMessageTs != null && overview?.lastMessageTs != null) {
     return { start: overview.firstMessageTs, end: overview.lastMessageTs }
   }
-
-  const db = openDatabase(sessionId)
+  const db = openDatabaseAdapter(sessionId)
   if (!db) return null
-
-  const row = db.prepare('SELECT MIN(ts) as start, MAX(ts) as end FROM message').get() as {
-    start: number | null
-    end: number | null
-  }
-
-  if (row.start === null || row.end === null) return null
-
-  return { start: row.start, end: row.end }
+  return coreGetTimeRange(db)
 }
 
 /**

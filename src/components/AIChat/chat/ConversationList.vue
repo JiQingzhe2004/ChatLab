@@ -2,6 +2,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import dayjs from 'dayjs'
+import { useAIService } from '@/services'
 
 const { t } = useI18n()
 
@@ -45,7 +46,7 @@ const menuOpenId = ref<string | null>(null)
 async function loadConversations() {
   isLoading.value = true
   try {
-    conversations.value = await window.aiApi.getConversations(props.sessionId)
+    conversations.value = await useAIService().getConversations(props.sessionId)
   } catch (error) {
     console.error('加载对话列表失败：', error)
   } finally {
@@ -115,7 +116,7 @@ async function saveTitle(convId: string) {
   if (props.disabled) return
   if (editingTitle.value.trim()) {
     try {
-      await window.aiApi.updateConversationTitle(convId, editingTitle.value.trim())
+      await useAIService().updateConversationTitle(convId, editingTitle.value.trim())
       const conv = conversations.value.find((c) => c.id === convId)
       if (conv) {
         conv.title = editingTitle.value.trim()
@@ -141,7 +142,7 @@ function handleMenuDelete(convId: string) {
 async function handleDelete(convId: string) {
   if (props.disabled) return
   try {
-    await window.aiApi.deleteConversation(convId)
+    await useAIService().deleteConversation(convId)
     conversations.value = conversations.value.filter((c) => c.id !== convId)
     emit('delete', convId)
   } catch (error) {

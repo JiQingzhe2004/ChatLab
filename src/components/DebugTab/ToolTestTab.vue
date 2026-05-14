@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useAIService } from '@/services'
 
 const { t } = useI18n()
 
@@ -86,7 +87,7 @@ watch(selectedToolName, () => {
 
 onMounted(async () => {
   try {
-    catalog.value = await window.aiApi.getToolCatalog()
+    catalog.value = await useAIService().getToolCatalog()
     if (catalog.value.length > 0) {
       selectedToolName.value = catalog.value[0].name
     }
@@ -129,7 +130,7 @@ async function execute() {
 
   try {
     const params = buildParams()
-    const res = await window.aiApi.executeTool(testId, selectedToolName.value, params, props.sessionId)
+    const res = await useAIService().executeTool(testId, selectedToolName.value, params, props.sessionId)
     if (res.error === 'cancelled') return
     if (res.success) {
       elapsed.value = res.elapsed ?? null
@@ -150,7 +151,7 @@ async function execute() {
 
 async function cancel() {
   if (currentTestId.value) {
-    await window.aiApi.cancelToolTest(currentTestId.value)
+    await useAIService().cancelToolTest(currentTestId.value)
     isExecuting.value = false
     currentTestId.value = null
   }

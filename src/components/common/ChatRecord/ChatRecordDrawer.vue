@@ -11,6 +11,7 @@ import SessionTimeline from './SessionTimeline.vue'
 import type { ChatRecordQuery } from './types'
 import { useLayoutStore } from '@/stores/layout'
 import { useSessionStore } from '@/stores/session'
+import { useSessionIndexService } from '@/services'
 import { storeToRefs } from 'pinia'
 
 const { t } = useI18n()
@@ -139,7 +140,7 @@ async function loadSessionsCache() {
   if (!currentSessionId.value) return
 
   try {
-    const sessions = await window.sessionApi.getSessions(currentSessionId.value)
+    const sessions = await useSessionIndexService().getSessions(currentSessionId.value)
     sessionsCache.value = sessions.map((s) => ({
       id: s.id,
       startTs: s.startTs,

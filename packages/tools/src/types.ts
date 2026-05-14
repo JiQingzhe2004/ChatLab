@@ -11,15 +11,18 @@ import type { DatabaseAdapter } from '@openchatlab/core'
  */
 export interface JsonSchema {
   type: 'object'
-  properties: Record<string, {
-    type: string
-    description?: string
-    items?: { type: string }
-    default?: unknown
-    enum?: unknown[]
-    minimum?: number
-    maximum?: number
-  }>
+  properties: Record<
+    string,
+    {
+      type: string
+      description?: string
+      items?: { type: string }
+      default?: unknown
+      enum?: unknown[]
+      minimum?: number
+      maximum?: number
+    }
+  >
   required?: string[]
 }
 

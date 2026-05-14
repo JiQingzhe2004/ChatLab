@@ -2,7 +2,7 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { TableSchema, SQLResult } from '@/components/analysis/SQLLab'
-import { getAdapter } from '@/adapters'
+import { useDataService, useAIService } from '@/services'
 import { getColumnLabel } from '@/components/analysis/SQLLab'
 import type { LocaleType } from '@/i18n/types'
 import { UITabs } from '@/components/UI'
@@ -57,7 +57,7 @@ async function loadConversations() {
   }
   try {
     const escapedId = props.sessionId.replace(/'/g, "''")
-    const res = await window.aiApi.executeAiSQL(
+    const res = await useAIService().executeAiSQL(
       `SELECT id, title FROM ai_conversation WHERE session_id = '${escapedId}' ORDER BY updated_at DESC`
     )
     conversations.value = res.rows.map((r) => ({ id: String(r[0]), title: r[1] ? String(r[1]) : null }))
@@ -94,17 +94,17 @@ const tableItems = computed(() =>
 
 async function runSQL(sql: string): Promise<SQLResult> {
   if (dbSource.value === 'ai') {
-    return await window.aiApi.executeAiSQL(sql)
+    return await useAIService().executeAiSQL(sql)
   }
-  return await getAdapter().executeSQL(props.sessionId, sql)
+  return await useDataService().executeSQL(props.sessionId, sql)
 }
 
 async function loadSchema() {
   try {
     if (dbSource.value === 'ai') {
-      schema.value = await window.aiApi.getAiSchema()
+      schema.value = await useAIService().getAiSchema()
     } else {
-      schema.value = await getAdapter().getSchema(props.sessionId)
+      schema.value = await useDataService().getSchema(props.sessionId)
     }
     if (sortedSchema.value.length > 0) {
       const defaultTable = isAiDb.value ? 'ai_message' : sortedSchema.value[0].name
@@ -246,7 +246,7 @@ async function handleClearDebugContext() {
   if (!confirm(t('analysis.debug.tableBrowser.confirmClearDebug'))) return
   isClearingDebug.value = true
   try {
-    const res = await window.aiApi.clearDebugContext()
+    const res = await useAIService().clearDebugContext()
     if (res.success) {
       await loadTableData()
     }

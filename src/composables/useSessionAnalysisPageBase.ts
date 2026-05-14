@@ -6,7 +6,7 @@ import type { MemberActivity, HourlyActivity, DailyActivity } from '@/types/anal
 import { useI18n } from 'vue-i18n'
 import { formatLocalizedDate } from '@/utils'
 import { useTimeSelect } from './useTimeSelect'
-import { getAdapter } from '@/adapters'
+import { useDataService } from '@/services'
 
 interface UseSessionAnalysisPageBaseOptions {
   route: RouteLocationNormalizedLoaded
@@ -65,7 +65,7 @@ export function useSessionAnalysisPageBase(options: UseSessionAnalysisPageBaseOp
     if (!currentSessionId.value) return
 
     try {
-      const sessionData = await getAdapter().getSession(currentSessionId.value)
+      const sessionData = await useDataService().getSession(currentSessionId.value)
       session.value = sessionData
     } catch (error) {
       console.error('加载基础数据失败:', error)
@@ -80,7 +80,7 @@ export function useSessionAnalysisPageBase(options: UseSessionAnalysisPageBaseOp
     try {
       const filter = timeFilter.value
 
-      const adapter = getAdapter()
+      const adapter = useDataService()
       const [members, hourly, daily, types] = await Promise.all([
         adapter.getMemberActivity(currentSessionId.value, filter),
         adapter.getHourlyActivity(currentSessionId.value, filter),

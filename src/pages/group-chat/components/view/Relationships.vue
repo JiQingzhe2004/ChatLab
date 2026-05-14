@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { MentionAnalysis, MemberMentionDetail } from '@/types/analysis'
-import { getAdapter } from '@/adapters'
+import { useDataService } from '@/services'
 import { RankListPro } from '@/components/charts'
 import type { RankItem } from '@/components/charts'
 import { SectionCard, EmptyState, LoadingState } from '@/components/UI'
@@ -25,7 +25,7 @@ async function loadMentionAnalysis() {
   if (!props.sessionId) return
   isLoadingMention.value = true
   try {
-    mentionAnalysis.value = await getAdapter().getMentionAnalysis(props.sessionId, props.timeFilter)
+    mentionAnalysis.value = await useDataService().getMentionAnalysis(props.sessionId, props.timeFilter)
   } catch (error) {
     console.error('加载 @ 互动分析失败:', error)
   } finally {

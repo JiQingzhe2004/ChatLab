@@ -36,3 +36,16 @@ export async function del<T = boolean>(path: string): Promise<T> {
   }
   return resp.json() as Promise<T>
 }
+
+export async function patch<T>(path: string, body?: unknown): Promise<T> {
+  const resp = await fetch(`${BASE}${path}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: body != null ? JSON.stringify(body) : undefined,
+  })
+  if (!resp.ok) {
+    const text = await resp.text().catch(() => '')
+    throw new Error(`HTTP ${resp.status}: ${text}`)
+  }
+  return resp.json() as Promise<T>
+}

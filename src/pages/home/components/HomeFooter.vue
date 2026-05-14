@@ -3,6 +3,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { CHATLAB_SITE_BASE, getChatlabSiteLocalePath, getChatlabSiteLangQuery } from '@/utils/chatlabSiteLocale'
 import { IS_ELECTRON } from '@/utils/platform'
+import { usePlatformService } from '@/services'
 
 const emit = defineEmits<{
   openChangelog: []
@@ -136,7 +137,7 @@ async function fetchConfig(): Promise<void> {
   try {
     let config: Record<string, unknown>
     if (IS_ELECTRON) {
-      const result = await window.api.app.fetchRemoteConfig(configUrl.value)
+      const result = await usePlatformService().fetchRemoteConfig(configUrl.value)
       if (!result.success || !result.data) return
       config = result.data as Record<string, unknown>
     } else {

@@ -8,6 +8,7 @@ import { useLayoutStore } from '@/stores/layout'
 import { useLLMStore } from '@/stores/llm'
 import { exportConversation, type ExportFormat, type ExportMessage } from '@/utils/conversationExport'
 import type { AgentRuntimeStatus } from '@electron/shared/types'
+import { useAIService } from '@/services'
 
 const { t } = useI18n()
 const toast = useToast()
@@ -144,8 +145,8 @@ async function handleExportConversation() {
   isExporting.value = true
   try {
     const [conv, messages] = await Promise.all([
-      window.aiApi.getConversation(props.currentConversationId),
-      window.aiApi.getMessages(props.currentConversationId),
+      useAIService().getConversation(props.currentConversationId),
+      useAIService().getMessages(props.currentConversationId),
     ])
 
     if (!conv || messages.length === 0) {
@@ -203,7 +204,7 @@ async function openAiLogFile() {
   if (isOpeningLog.value) return
   isOpeningLog.value = true
   try {
-    const result = await window.aiApi.showAiLogFile()
+    const result = await useAIService().showAiLogFile()
     if (!result?.success) {
       toast.fail(t('ai.chat.statusBar.log.openFailed'), {
         description: result?.error || t('ai.chat.statusBar.log.openFailedDesc'),

@@ -60,12 +60,69 @@ export async function initServices(): Promise<void> {
 }
 
 async function initElectronAdapters(): Promise<void> {
-  // Phase 1+: 按需动态 import 各领域 Electron Adapter
-  // 初期保持空实现，各 Phase 逐步添加
+  const { ElectronDataAdapter } = await import('./data/electron')
+  registerAdapter('data', new ElectronDataAdapter())
+
+  const { ElectronImportAdapter } = await import('./import/electron')
+  registerAdapter('import', new ElectronImportAdapter())
+
+  const { ElectronSessionIndexAdapter } = await import('./session-index/electron')
+  registerAdapter('session-index', new ElectronSessionIndexAdapter())
+
+  const { ElectronMessageAdapter } = await import('./message/electron')
+  registerAdapter('message', new ElectronMessageAdapter())
+
+  const { ElectronPlatformAdapter } = await import('./platform/electron')
+  registerAdapter('platform', new ElectronPlatformAdapter())
+
+  const { ElectronAIAdapter } = await import('./ai/electron')
+  registerAdapter('ai', new ElectronAIAdapter())
 }
 
 async function initWebServeAdapters(): Promise<void> {
-  // Phase 1+: 按需动态 import 各领域 Fetch Adapter
+  const { FetchDataAdapter } = await import('./data/fetch')
+  registerAdapter('data', new FetchDataAdapter())
+
+  const { FetchImportAdapter } = await import('./import/fetch')
+  registerAdapter('import', new FetchImportAdapter())
+
+  const { FetchSessionIndexAdapter } = await import('./session-index/fetch')
+  registerAdapter('session-index', new FetchSessionIndexAdapter())
+
+  const { FetchMessageAdapter } = await import('./message/fetch')
+  registerAdapter('message', new FetchMessageAdapter())
+
+  const { WebPlatformAdapter } = await import('./platform/web')
+  registerAdapter('platform', new WebPlatformAdapter())
+
+  const { WebAIAdapter } = await import('./ai/web')
+  registerAdapter('ai', new WebAIAdapter())
+
+  await installChartPluginShims()
+}
+
+/**
+ * chart-* packages (packages/chart-ranking, chart-message, etc.) directly
+ * call window.chatApi.pluginQuery / pluginCompute / getMemberActivity /
+ * getAvailableYears. In Electron, these are injected by the preload script.
+ * In web-serve mode, we install equivalent shims backed by DataService.
+ */
+async function installChartPluginShims(): Promise<void> {
+  const { useDataService } = await import('./data/service')
+  if (!(window as any).chatApi) {
+    ;(window as any).chatApi = {}
+  }
+  const chatApi = (window as any).chatApi
+  const dataService = useDataService()
+
+  chatApi.pluginQuery = <T>(sid: string, sql: string, params?: unknown[]) =>
+    dataService.pluginQuery<T>(sid, sql, params)
+  chatApi.pluginCompute = <T>(_fnString: string, input: unknown): Promise<T> => {
+    const fn = new Function('return ' + _fnString)()
+    return Promise.resolve(fn(input))
+  }
+  chatApi.getMemberActivity = (sid: string, f?: any) => dataService.getMemberActivity(sid, f)
+  chatApi.getAvailableYears = (sid: string) => dataService.getAvailableYears(sid)
 }
 
 async function initWebBrowserAdapters(): Promise<void> {

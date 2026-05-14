@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { AnalysisSession, ImportProgress, ChatType } from '@/types/base'
-import { getAdapter } from '@/adapters'
+import { useDataService, useImportService, useSessionIndexService, usePlatformService } from '@/services'
 import { IS_ELECTRON } from '@/utils/platform'
 
 /** 侧边栏筛选类型 */
@@ -163,7 +163,7 @@ export const useSessionStore = defineStore(
      */
     async function loadSessions() {
       try {
-        const list = await getAdapter().getSessions()
+        const list = await useDataService().getSessions()
         sessions.value = list
         // 如果当前选中的会话不存在了，清除选中状态
         if (currentSessionId.value && !list.find((s) => s.id === currentSessionId.value)) {
@@ -184,20 +184,17 @@ export const useSessionStore = defineStore(
       error?: string
     }> {
       try {
-        const result = await window.chatApi.selectFile()
-        // 用户取消选择
-        if (!result) {
+        const dialogResult = await usePlatformService().showOpenDialog({
+          properties: ['openFile'],
+          filters: [
+            { name: 'Chat Files', extensions: ['json', 'jsonl', 'txt'] },
+            { name: 'All Files', extensions: ['*'] },
+          ],
+        })
+        if (dialogResult.canceled || dialogResult.filePaths.length === 0) {
           return { success: false, error: 'error.no_file_selected' }
         }
-        // 有错误（如格式不识别）- 优先检查错误，因为此时可能没有 filePath
-        if (result.error) {
-          return { success: false, error: result.error }
-        }
-        // 没有文件路径（用户取消）
-        if (!result.filePath) {
-          return { success: false, error: 'error.no_file_selected' }
-        }
-        return await importFileFromPath(result.filePath)
+        return await importFileFromPath(dialogResult.filePaths[0])
       } catch (error) {
         return { success: false, error: String(error) }
       }
@@ -231,19 +228,15 @@ export const useSessionStore = defineStore(
         importProgress.value = {
           stage: 'detecting',
           progress: 0,
-          message: '', // Progress text is handled by frontend i18n
+          message: '',
         }
 
-        // 进度队列控制
         const queue: ImportProgress[] = []
         let isProcessing = false
         let currentStage = 'reading'
         let lastStageTime = Date.now()
         const MIN_STAGE_TIME = 1000
 
-        /**
-         * 处理导入进度队列，确保阶段展示足够时间
-         */
         const processQueue = async () => {
           if (isProcessing) return
           isProcessing = true
@@ -265,14 +258,11 @@ export const useSessionStore = defineStore(
           isProcessing = false
         }
 
-        const unsubscribe = window.chatApi.onImportProgress((progress) => {
+        const importResult = await useImportService().importFile(filePath, undefined, (progress) => {
           if (progress.stage === 'done') return
           queue.push(progress)
           processQueue()
         })
-
-        const importResult = await window.chatApi.import(filePath)
-        unsubscribe()
 
         while (queue.length > 0 || isProcessing) {
           await new Promise((resolve) => setTimeout(resolve, 100))
@@ -292,14 +282,12 @@ export const useSessionStore = defineStore(
           await loadSessions()
           currentSessionId.value = importResult.sessionId
 
-          // 自动生成会话索引
           try {
             const savedThreshold = localStorage.getItem('sessionGapThreshold')
-            const gapThreshold = savedThreshold ? parseInt(savedThreshold, 10) : 1800 // 默认30分钟
-            await window.sessionApi.generate(importResult.sessionId, gapThreshold)
+            const gapThreshold = savedThreshold ? parseInt(savedThreshold, 10) : 1800
+            await useSessionIndexService().generate(importResult.sessionId, gapThreshold)
           } catch (error) {
             console.error('自动生成会话索引失败:', error)
-            // 不阻断导入流程，用户可以手动生成
           }
 
           return { success: true, diagnostics: importResult.diagnostics }
@@ -405,14 +393,11 @@ export const useSessionStore = defineStore(
             isProcessing = false
           }
 
-          const unsubscribe = window.chatApi.onImportProgress((progress) => {
+          const importResult = await useImportService().importFile(file.path, undefined, (progress) => {
             if (progress.stage === 'done') return
             queue.push(progress)
             processQueue()
           })
-
-          const importResult = await window.chatApi.import(file.path)
-          unsubscribe()
 
           // 等待进度队列处理完成（但如果已取消则快速跳过）
           let waitCount = 0
@@ -433,7 +418,7 @@ export const useSessionStore = defineStore(
               try {
                 const savedThreshold = localStorage.getItem('sessionGapThreshold')
                 const gapThreshold = savedThreshold ? parseInt(savedThreshold, 10) : 1800
-                await window.sessionApi.generate(importResult.sessionId, gapThreshold)
+                await useSessionIndexService().generate(importResult.sessionId, gapThreshold)
               } catch (error) {
                 console.error('自动生成会话索引失败:', error)
               }
@@ -457,7 +442,7 @@ export const useSessionStore = defineStore(
               try {
                 const savedThreshold = localStorage.getItem('sessionGapThreshold')
                 const gapThreshold = savedThreshold ? parseInt(savedThreshold, 10) : 1800
-                await window.sessionApi.generate(importResult.sessionId, gapThreshold)
+                await useSessionIndexService().generate(importResult.sessionId, gapThreshold)
               } catch (error) {
                 console.error('自动生成会话索引失败:', error)
               }
@@ -602,7 +587,7 @@ export const useSessionStore = defineStore(
           try {
             const savedThreshold = localStorage.getItem('sessionGapThreshold')
             const gapThreshold = savedThreshold ? parseInt(savedThreshold, 10) : 1800
-            await window.sessionApi.generate(result.sessionId, gapThreshold)
+            await useSessionIndexService().generate(result.sessionId, gapThreshold)
           } catch (error) {
             console.error('自动生成会话索引失败:', error)
           }
@@ -642,7 +627,7 @@ export const useSessionStore = defineStore(
      */
     async function deleteSession(id: string): Promise<boolean> {
       try {
-        const success = await getAdapter().deleteSession(id)
+        const success = await useDataService().deleteSession(id)
         if (success) {
           const index = sessions.value.findIndex((s) => s.id === id)
           if (index !== -1) {
@@ -665,7 +650,7 @@ export const useSessionStore = defineStore(
      */
     async function renameSession(id: string, newName: string): Promise<boolean> {
       try {
-        const success = await getAdapter().renameSession(id, newName)
+        const success = await useDataService().renameSession(id, newName)
         if (success) {
           const session = sessions.value.find((s) => s.id === id)
           if (session) {
@@ -691,7 +676,7 @@ export const useSessionStore = defineStore(
      */
     async function updateSessionOwnerId(id: string, ownerId: string | null): Promise<boolean> {
       try {
-        const success = await getAdapter().updateSessionOwnerId(id, ownerId)
+        const success = await useDataService().updateSessionOwnerId(id, ownerId)
         if (success) {
           const session = sessions.value.find((s) => s.id === id)
           if (session) {

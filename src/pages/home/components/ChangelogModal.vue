@@ -7,6 +7,7 @@ import { useSettingsStore } from '@/stores/settings'
 import { sanitizeSummary } from '@/utils/sanitizeSummary'
 import { getChangeTypeConfig } from './changelogTypeConfig'
 import { IS_ELECTRON } from '@/utils/platform'
+import { usePlatformService } from '@/services'
 
 const { t } = useI18n()
 const settingsStore = useSettingsStore()
@@ -100,7 +101,7 @@ async function fetchChangelogs() {
     const url = getChangelogUrl(locale.value)
     let data: unknown
     if (IS_ELECTRON) {
-      const result = await window.api.app.fetchRemoteConfig(url)
+      const result = await usePlatformService().fetchRemoteConfig(url)
       if (!result.success || !result.data) {
         throw new Error(result.error || 'Failed to fetch')
       }
@@ -168,7 +169,7 @@ async function checkNewVersion() {
     }
 
     // 1. 获取当前软件版本号
-    const rawVersion = await window.api.app.getVersion()
+    const rawVersion = await usePlatformService().getVersion()
     const currentVersion = normalizeVersion(rawVersion)
     if (!currentVersion) return
 
@@ -188,7 +189,7 @@ async function checkNewVersion() {
     }
 
     // 4. readVersion 为空或不等于 currentVersion，需要请求远程 changelog 数据
-    const result = await window.api.app.fetchRemoteConfig(getChangelogUrl(locale.value))
+    const result = await usePlatformService().fetchRemoteConfig(getChangelogUrl(locale.value))
     if (!result.success || !result.data) return
 
     const data = result.data as ChangelogItem[]
@@ -229,7 +230,7 @@ async function open() {
   // 手动打开也标记当前版本，避免标签缺失
   if (IS_ELECTRON) {
     try {
-      currentAppVersion.value = normalizeVersion(await window.api.app.getVersion())
+      currentAppVersion.value = normalizeVersion(await usePlatformService().getVersion())
     } catch {
       currentAppVersion.value = null
     }

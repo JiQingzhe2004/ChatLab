@@ -9,7 +9,7 @@ import type { FastifyInstance } from 'fastify'
 import type { DatabaseManager } from '@openchatlab/node-runtime'
 import { successResponse } from '../errors'
 
-// eslint-disable-next-line @typescript-eslint/no-var-requires
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const pkg = require('../../../package.json') as { version: string }
 
 export function registerSystemRoutes(server: FastifyInstance, dbManager: DatabaseManager): void {

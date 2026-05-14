@@ -3,7 +3,7 @@ import { ref, computed, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import dayjs from 'dayjs'
 import { formatDateRange } from '@/utils'
-import { getAdapter } from '@/adapters'
+import { useDataService } from '@/services'
 import UITabs from '@/components/UI/Tabs.vue'
 import DatePicker from '@/components/UI/DatePicker.vue'
 
@@ -379,7 +379,7 @@ async function loadData() {
   }
 
   try {
-    const adapter = getAdapter()
+    const adapter = useDataService()
     const [years, range] = await Promise.all([
       adapter.getAvailableYears(props.sessionId),
       adapter.getTimeRange(props.sessionId),

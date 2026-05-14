@@ -13,6 +13,8 @@ export {
   getCacheDir,
   buildTimeFilter,
   buildSystemMessageFilter,
+  wrapAsDatabaseAdapter,
+  openDatabaseAdapter,
   type TimeFilter,
 } from './dbCore'
 

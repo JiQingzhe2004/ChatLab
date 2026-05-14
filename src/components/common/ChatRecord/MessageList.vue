@@ -10,6 +10,7 @@ import dayjs from 'dayjs'
 import MessageItem from './MessageItem.vue'
 import type { ChatRecordMessage, ChatRecordQuery } from './types'
 import { useSessionStore } from '@/stores/session'
+import { useMessageService } from '@/services'
 
 // 时间分隔阈值（秒）：消息间隔超过此值则显示时间分隔线
 const TIME_SEPARATOR_THRESHOLD = 5 * 60 // 5 分钟
@@ -167,13 +168,14 @@ async function loadInitialMessages() {
 
     if (targetId) {
       // 以目标消息为中心，加载前后各 50 条
+      const messageService = useMessageService()
       const [beforeResult, afterResult] = await Promise.all([
-        window.aiApi.getMessagesBefore(sessionId, targetId, 50, filter, senderId, keywords),
-        window.aiApi.getMessagesAfter(sessionId, targetId, 50, filter, senderId, keywords),
+        messageService.getMessagesBefore(sessionId, targetId, 50, filter, senderId, keywords),
+        messageService.getMessagesAfter(sessionId, targetId, 50, filter, senderId, keywords),
       ])
 
       // 获取目标消息本身
-      const targetMessages = await window.aiApi.getMessageContext(sessionId, targetId, 0)
+      const targetMessages = await messageService.getMessageContext(sessionId, targetId, 0)
 
       // 合并消息列表
       messages.value = mapMessages([...beforeResult.messages, ...targetMessages, ...afterResult.messages])
@@ -187,7 +189,7 @@ async function loadInitialMessages() {
       // 有关键词，使用搜索功能
       isSearchMode.value = true
       searchOffset.value = 0
-      const result = await window.aiApi.searchMessages(sessionId, keywords, filter, 100, 0, senderId)
+      const result = await useMessageService().searchMessages(sessionId, keywords, filter, 100, 0, senderId)
       messages.value = mapMessages(result.messages)
       hasMoreBefore.value = false // 搜索结果从最新开始，没有更早的
       hasMoreAfter.value = result.messages.length >= 100
@@ -200,7 +202,7 @@ async function loadInitialMessages() {
       // 没有目标消息和关键词，加载最新的 100 条
       isSearchMode.value = false
       searchOffset.value = 0
-      const result = await window.aiApi.getAllRecentMessages(sessionId, filter, 100)
+      const result = await useMessageService().getAllRecentMessages(sessionId, filter, 100)
       messages.value = mapMessages(result.messages)
       hasMoreBefore.value = result.messages.length >= 100
       hasMoreAfter.value = false
@@ -275,7 +277,14 @@ async function loadMoreBefore() {
   try {
     const query = toRaw(props.query)
     const { filter, senderId, keywords } = buildFilterParams(query)
-    const result = await window.aiApi.getMessagesBefore(sessionId, firstMessage.id, 50, filter, senderId, keywords)
+    const result = await useMessageService().getMessagesBefore(
+      sessionId,
+      firstMessage.id,
+      50,
+      filter,
+      senderId,
+      keywords
+    )
 
     if (result.messages.length > 0) {
       // 记录当前的第一个可见项索引
@@ -322,7 +331,14 @@ async function loadMoreAfter() {
 
     if (isSearchMode.value && keywords && keywords.length > 0) {
       // 搜索模式：使用分页加载
-      const result = await window.aiApi.searchMessages(sessionId, keywords, filter, 50, searchOffset.value, senderId)
+      const result = await useMessageService().searchMessages(
+        sessionId,
+        keywords,
+        filter,
+        50,
+        searchOffset.value,
+        senderId
+      )
 
       if (result.messages.length > 0) {
         messages.value = [...messages.value, ...mapMessages(result.messages)]
@@ -340,7 +356,14 @@ async function loadMoreAfter() {
       const lastMessage = messages.value[messages.value.length - 1]
       if (!lastMessage) return
 
-      const result = await window.aiApi.getMessagesAfter(sessionId, lastMessage.id, 50, filter, senderId, keywords)
+      const result = await useMessageService().getMessagesAfter(
+        sessionId,
+        lastMessage.id,
+        50,
+        filter,
+        senderId,
+        keywords
+      )
 
       if (result.messages.length > 0) {
         messages.value = [...messages.value, ...mapMessages(result.messages)]

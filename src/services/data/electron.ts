@@ -1,24 +1,9 @@
 /**
- * ElectronAdapter — 包装 window.chatApi (Electron IPC)
+ * ElectronDataAdapter — 包装 window.chatApi (Electron IPC)
  *
- * 行为与现有 window.chatApi 完全一致，确保桌面版零影响。
  * 所有方法直接代理到 window.chatApi 的对应方法。
  */
 
-import type {
-  QueryAdapter,
-  AdapterCapabilities,
-  SQLResult,
-  TableSchema,
-  PaginationParams,
-  PaginatedResult,
-  MentionGraphData,
-  MessageLengthDistribution,
-  ImportProgress,
-  ImportResult,
-  FormatInfo,
-  MultiChatEntry,
-} from './types'
 import type { AnalysisSession, MessageType } from '@/types/base'
 import type { TimeFilter } from '@openchatlab/shared-types'
 import type {
@@ -37,23 +22,17 @@ import type {
   RelationshipStats,
 } from '@/types/analysis'
 import type { LanguagePreferenceResult } from '@/types/quotes/languagePreference'
+import type {
+  DataAdapter,
+  PaginationParams,
+  PaginatedResult,
+  SQLResult,
+  TableSchema,
+  MentionGraphData,
+  MessageLengthDistribution,
+} from './types'
 
-export class ElectronAdapter implements QueryAdapter {
-  getCapabilities(): AdapterCapabilities {
-    return {
-      ai: true,
-      nlp: true,
-      fts: true,
-      nativeFileDialog: true,
-      osIntegration: true,
-      demoImport: true,
-      plugin: true,
-      migration: true,
-      merge: true,
-      incrementalImport: true,
-    }
-  }
-
+export class ElectronDataAdapter implements DataAdapter {
   // ==================== 会话管理 ====================
 
   getSessions(): Promise<AnalysisSession[]> {
@@ -202,65 +181,6 @@ export class ElectronAdapter implements QueryAdapter {
 
   getSchema(sessionId: string): Promise<TableSchema[]> {
     return window.chatApi.getSchema(sessionId)
-  }
-
-  // ==================== 导入管线 ====================
-
-  async importFile(
-    file: File,
-    options?: { formatId?: string; chatIndex?: number },
-    onProgress?: (p: ImportProgress) => void
-  ): Promise<ImportResult> {
-    const filePath = (window as any).electron?.webUtils?.getPathForFile?.(file)
-    if (!filePath) {
-      return { success: false, error: 'Cannot get file path in Electron' }
-    }
-    return new Promise((resolve) => {
-      const unlisten = window.chatApi.onImportProgress((progress: any) => {
-        onProgress?.({
-          stage: progress.stage || 'parsing',
-          progress: progress.percentage || 0,
-          message: progress.message || '',
-          bytesRead: progress.bytesRead,
-          totalBytes: progress.totalBytes,
-          messagesProcessed: progress.messagesProcessed,
-        })
-      })
-      window.chatApi
-        .importWithOptions(filePath, options || {})
-        .then((result) => {
-          unlisten()
-          resolve({
-            success: result.success,
-            sessionId: result.sessionId,
-            error: result.error,
-          })
-        })
-        .catch((err: Error) => {
-          unlisten()
-          resolve({ success: false, error: err.message })
-        })
-    })
-  }
-
-  async detectFormat(file: File): Promise<FormatInfo | null> {
-    const filePath = (window as any).electron?.webUtils?.getPathForFile?.(file)
-    if (!filePath) return null
-    const result = await window.chatApi.detectFormat(filePath)
-    if (!result) return null
-    return { ...result, extensions: [] }
-  }
-
-  async scanMultiChatFile(file: File): Promise<MultiChatEntry[]> {
-    const filePath = (window as any).electron?.webUtils?.getPathForFile?.(file)
-    if (!filePath) return []
-    const result = await window.chatApi.scanMultiChatFile(filePath)
-    if (!result.success || !result.chats) return []
-    return result.chats
-  }
-
-  async getSupportedFormats(): Promise<FormatInfo[]> {
-    return window.chatApi.getSupportedFormats()
   }
 
   // ==================== 插件系统 ====================

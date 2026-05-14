@@ -11,11 +11,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod'
 import { loadConfig } from '@openchatlab/config'
 import { NodePathProvider, DatabaseManager } from '@openchatlab/node-runtime'
-import {
-  getSessionMeta,
-  getSessionOverview,
-  getDatabaseSchema,
-} from '@openchatlab/core'
+import { getSessionMeta, getSessionOverview, getDatabaseSchema } from '@openchatlab/core'
 import { TOOL_REGISTRY } from '@openchatlab/tools'
 import type { SessionListContext } from '@openchatlab/tools/src/definitions/sessions'
 
@@ -84,21 +80,16 @@ export async function startMcpServer(): Promise<void> {
     if (tool.name === 'chatlab_sessions') {
       const zodShape = jsonSchemaToZod(tool.inputSchema.properties, tool.inputSchema.required)
 
-      server.tool(
-        tool.name,
-        tool.description,
-        zodShape,
-        async (params) => {
-          const context: SessionListContext = {
-            db: null as any,
-            sessionId: '',
-            listSessionIds: () => dbManager.listSessionIds(),
-            openDb: (id) => dbManager.open(id),
-          }
-          const result = tool.handler(params as Record<string, unknown>, context)
-          return { content: [{ type: 'text' as const, text: result.content }] }
+      server.tool(tool.name, tool.description, zodShape, async (params) => {
+        const context: SessionListContext = {
+          db: null as any,
+          sessionId: '',
+          listSessionIds: () => dbManager.listSessionIds(),
+          openDb: (id) => dbManager.open(id),
         }
-      )
+        const result = tool.handler(params as Record<string, unknown>, context)
+        return { content: [{ type: 'text' as const, text: result.content }] }
+      })
       continue
     }
 
@@ -108,56 +99,48 @@ export async function startMcpServer(): Promise<void> {
       ...jsonSchemaToZod(tool.inputSchema.properties, tool.inputSchema.required),
     }
 
-    server.tool(
-      tool.name,
-      tool.description,
-      zodShape,
-      async (params) => {
-        const sessionId = params.session_id as string
-        const db = dbManager.open(sessionId)
-        if (!db) {
-          return {
-            content: [{ type: 'text' as const, text: JSON.stringify({ error: `Session ${sessionId} not found` }) }],
-            isError: true,
-          }
+    server.tool(tool.name, tool.description, zodShape, async (params) => {
+      const sessionId = params.session_id as string
+      const db = dbManager.open(sessionId)
+      if (!db) {
+        return {
+          content: [{ type: 'text' as const, text: JSON.stringify({ error: `Session ${sessionId} not found` }) }],
+          isError: true,
         }
-
-        const toolParams = { ...params } as Record<string, unknown>
-        delete toolParams.session_id
-
-        const result = tool.handler(toolParams, { db, sessionId })
-        return { content: [{ type: 'text' as const, text: result.content }] }
       }
-    )
+
+      const toolParams = { ...params } as Record<string, unknown>
+      delete toolParams.session_id
+
+      const result = tool.handler(toolParams, { db, sessionId })
+      return { content: [{ type: 'text' as const, text: result.content }] }
+    })
   }
 
   // --- 注册 Resources ---
 
-  server.resource(
-    'sessions-list',
-    'chatlab://sessions',
-    { description: '所有已导入的聊天会话列表' },
-    async () => {
-      const sessionIds = dbManager.listSessionIds()
-      const sessions = sessionIds
-        .map((id) => {
-          const db = dbManager.open(id)
-          if (!db) return null
-          const meta = getSessionMeta(db)
-          if (!meta) return null
-          return { id, name: meta.name, platform: meta.platform, type: meta.type }
-        })
-        .filter(Boolean)
+  server.resource('sessions-list', 'chatlab://sessions', { description: '所有已导入的聊天会话列表' }, async () => {
+    const sessionIds = dbManager.listSessionIds()
+    const sessions = sessionIds
+      .map((id) => {
+        const db = dbManager.open(id)
+        if (!db) return null
+        const meta = getSessionMeta(db)
+        if (!meta) return null
+        return { id, name: meta.name, platform: meta.platform, type: meta.type }
+      })
+      .filter(Boolean)
 
-      return {
-        contents: [{
+    return {
+      contents: [
+        {
           uri: 'chatlab://sessions',
           text: JSON.stringify(sessions, null, 2),
           mimeType: 'application/json',
-        }],
-      }
+        },
+      ],
     }
-  )
+  })
 
   server.resource(
     'session-meta',
@@ -174,11 +157,13 @@ export async function startMcpServer(): Promise<void> {
       const overview = getSessionOverview(db)
 
       return {
-        contents: [{
-          uri: uri.href,
-          text: JSON.stringify({ ...meta, ...overview }, null, 2),
-          mimeType: 'application/json',
-        }],
+        contents: [
+          {
+            uri: uri.href,
+            text: JSON.stringify({ ...meta, ...overview }, null, 2),
+            mimeType: 'application/json',
+          },
+        ],
       }
     }
   )
@@ -197,11 +182,13 @@ export async function startMcpServer(): Promise<void> {
       const schema = getDatabaseSchema(db)
 
       return {
-        contents: [{
-          uri: uri.href,
-          text: JSON.stringify(schema, null, 2),
-          mimeType: 'application/json',
-        }],
+        contents: [
+          {
+            uri: uri.href,
+            text: JSON.stringify(schema, null, 2),
+            mimeType: 'application/json',
+          },
+        ],
       }
     }
   )

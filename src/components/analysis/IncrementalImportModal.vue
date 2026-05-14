@@ -7,6 +7,7 @@
 import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { FileDropZone } from '@/components/UI'
+import { useImportService, usePlatformService } from '@/services'
 import type { ImportProgress } from '@/types/base'
 
 const props = defineProps<{
@@ -86,7 +87,7 @@ async function handleFileDrop({ paths }: { files: File[]; paths: string[] }) {
 
 // 点击选择文件
 async function handleSelectFile() {
-  const result = await window.api.dialog.showOpenDialog({
+  const result = await usePlatformService().showOpenDialog({
     title: t('analysis.incremental.selectFile'),
     properties: ['openFile'],
     filters: [
@@ -115,7 +116,7 @@ async function analyzeFile() {
   errorMessage.value = null
 
   try {
-    const result = await window.chatApi.analyzeIncrementalImport(props.sessionId, selectedFile.value.path)
+    const result = await useImportService().analyzeIncrementalImport(props.sessionId, selectedFile.value.path)
 
     if (result.error) {
       stage.value = 'error'
@@ -148,13 +149,9 @@ async function executeImport() {
   }
 
   try {
-    // 监听进度
-    const unsubscribe = window.chatApi.onImportProgress((progress) => {
+    const result = await useImportService().incrementalImport(props.sessionId, selectedFile.value.path, (progress) => {
       importProgress.value = progress
     })
-
-    const result = await window.chatApi.incrementalImport(props.sessionId, selectedFile.value.path)
-    unsubscribe()
 
     if (result.success) {
       importResult.value = { newMessageCount: result.newMessageCount }
