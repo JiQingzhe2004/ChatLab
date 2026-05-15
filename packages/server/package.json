@@ -9,7 +9,8 @@
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "scripts": {
-    "cli": "tsx src/cli.ts",
+    "cli": "node scripts/ensure-native.mjs && tsx src/cli.ts",
+    "ensure-native": "node scripts/ensure-native.mjs",
     "rebuild-native": "bash scripts/rebuild-native.sh",
     "rebuild-sqlite": "npm rebuild better-sqlite3"
   },
