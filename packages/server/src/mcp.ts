@@ -12,7 +12,7 @@ import { z } from 'zod'
 import { loadConfig } from '@openchatlab/config'
 import { NodePathProvider, DatabaseManager } from '@openchatlab/node-runtime'
 import { getSessionMeta, getSessionOverview, getDatabaseSchema } from '@openchatlab/core'
-import { TOOL_REGISTRY, CoreDataProvider } from '@openchatlab/tools'
+import { MCP_TOOL_REGISTRY, CoreDataProvider } from '@openchatlab/tools'
 import type { SessionListContext } from '@openchatlab/tools/src/definitions/sessions'
 
 const MCP_TOOL_PREFIX = 'chatlab_'
@@ -78,7 +78,7 @@ export async function startMcpServer(): Promise<void> {
 
   // --- 注册 Tools ---
 
-  for (const tool of TOOL_REGISTRY) {
+  for (const tool of MCP_TOOL_REGISTRY) {
     const mcpName = `${MCP_TOOL_PREFIX}${tool.name}`
 
     if (tool.name === 'list_sessions') {

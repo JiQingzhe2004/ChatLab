@@ -21,7 +21,12 @@ const DEFAULT_MAX_TOOL_RESULT_TOKENS = 8000
 
 const TOOL_TRUNCATION_STRATEGY: Record<string, TruncationStrategy> = {
   search_keyword: 'keep_first',
+  search_messages: 'keep_first',
+  deep_search_messages: 'keep_first',
   get_recent_messages: 'keep_last',
+  get_message_context: 'keep_last',
+  get_session_messages: 'keep_last',
+  get_conversation_between: 'keep_last',
 }
 
 export interface ServerToolContext {

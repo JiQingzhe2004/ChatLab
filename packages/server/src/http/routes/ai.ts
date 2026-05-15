@@ -16,7 +16,7 @@ import type { DatabaseManager, AIConversationManager } from '@openchatlab/node-r
 import { parseAssistantFile, parseSkillFile, SkillManager, createActivateSkillTool } from '@openchatlab/node-runtime'
 import { BUILTIN_TOOL_CATALOG, BUILTIN_PROVIDERS, BUILTIN_MODELS, getBuiltinModelsByProvider } from '@openchatlab/core'
 import type { AssistantSummary, SkillSummary } from '@openchatlab/node-runtime'
-import { TOOL_REGISTRY } from '@openchatlab/tools'
+import { AGENT_TOOL_REGISTRY } from '@openchatlab/tools'
 import { adaptToolsForAgent } from '../../ai/tool-adapter'
 import { loadAssistantConfig } from '../../ai/assistant-loader'
 import { runServerAgent, type AgentStreamEvent } from '../../ai/agent'
@@ -518,7 +518,7 @@ export function registerAiRoutes(
 
     const db = (dbManager as any).open?.(sessionId)
     const agentTools = db
-      ? adaptToolsForAgent(TOOL_REGISTRY, () => ({
+      ? adaptToolsForAgent(AGENT_TOOL_REGISTRY, () => ({
           db,
           sessionId,
           locale,

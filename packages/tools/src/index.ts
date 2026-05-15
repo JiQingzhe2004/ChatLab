@@ -5,8 +5,8 @@
  * 提供平台无关的工具定义和 handler，服务于 MCP Server、HTTP API 和 Electron Agent。
  */
 
-// === Registry (Server/MCP 使用) ===
-export { TOOL_REGISTRY, getToolByName } from './registry'
+// === Registry ===
+export { MCP_TOOL_REGISTRY, AGENT_TOOL_REGISTRY, getToolByName } from './registry'
 
 // === Providers ===
 export { CoreDataProvider } from './providers/core-data-provider'
