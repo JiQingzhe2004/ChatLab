@@ -66,6 +66,10 @@ export { runAgentCore } from './agent'
 export { buildPiModel, normalizeAnthropicBaseUrl, normalizeOpenAICompatibleBaseUrl } from './llm-builder'
 export type { PiModelConfig, BuildPiModelOptions } from './llm-builder'
 
+// Remote LLM API
+export { fetchRemoteModels, validateApiKey } from './remote-api'
+export type { RemoteModel, FetchRemoteModelsResult, RemoteApiOptions } from './remote-api'
+
 // Re-exports from @mariozechner/pi-agent-core
 export type { AgentTool, AgentToolResult } from '@mariozechner/pi-agent-core'
 

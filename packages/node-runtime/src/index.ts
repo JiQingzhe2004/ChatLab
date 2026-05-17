@@ -90,6 +90,10 @@ export { runAgentCore } from './ai'
 export { buildPiModel, normalizeAnthropicBaseUrl, normalizeOpenAICompatibleBaseUrl } from './ai'
 export type { PiModelConfig, BuildPiModelOptions } from './ai'
 
+// Remote LLM API
+export { fetchRemoteModels, validateApiKey } from './ai'
+export type { RemoteModel, FetchRemoteModelsResult, RemoteApiOptions } from './ai'
+
 // Re-exports: @mariozechner/pi-agent-core & @mariozechner/pi-ai
 export type { AgentTool, AgentToolResult } from './ai'
 export { Type, completeSimple, streamSimple } from './ai'

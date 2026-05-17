@@ -13,7 +13,14 @@ import { aiLogger } from '../logger'
 import { resolveApiKey, writeAuthProfile } from '@openchatlab/config'
 import { buildChatLabUserAgentHeaders } from '../../utils/httpHeaders'
 import { t } from '../../i18n'
-import { completeSimple, buildPiModel as buildPiModelCore, type PiModel, type PiApi } from '@openchatlab/node-runtime'
+import {
+  buildPiModel as buildPiModelCore,
+  fetchRemoteModels as fetchRemoteModelsCore,
+  validateApiKey as validateApiKeyCore,
+  type PiModel,
+  type PiApi,
+  type FetchRemoteModelsResult,
+} from '@openchatlab/node-runtime'
 
 // 新模型系统导出
 export { BUILTIN_PROVIDERS, getBuiltinProviderById } from './provider-registry'
@@ -433,131 +440,26 @@ export function buildPiModel(config: AIServiceConfig): PiModel<PiApi> {
   })
 }
 
-// ==================== 远程模型列表获取 ====================
+// ==================== Remote Model API ====================
 
-export interface RemoteModel {
-  id: string
-  name: string
-  ownedBy?: string
-  contextWindow?: number
-}
+export type { RemoteModel } from '@openchatlab/node-runtime'
+export { type FetchRemoteModelsResult } from '@openchatlab/node-runtime'
 
-export interface FetchRemoteModelsResult {
-  success: boolean
-  models?: RemoteModel[]
-  error?: string
-}
+const electronRemoteApiOptions = () => ({
+  headers: buildChatLabUserAgentHeaders(),
+  onLog: (level: 'info' | 'error', tag: string, message: string, data?: unknown) => {
+    if (level === 'error') aiLogger.error(tag, message, data)
+    else aiLogger.info(tag, message, data)
+  },
+})
 
-/**
- * 根据 API 格式决定 baseUrl 到 /models 端点的映射：
- * - openai-completions / openai-responses → {resolvedBaseUrl}/models
- * - google-generative-ai → {baseUrl}/v1beta/models?key={apiKey}
- * - anthropic-messages → 不支持
- */
 export async function fetchRemoteModels(
   provider: string,
   apiKey: string,
   baseUrl?: string,
   apiFormat?: string
 ): Promise<FetchRemoteModelsResult> {
-  const effectiveApiFormat = apiFormat || 'openai-completions'
-
-  if (effectiveApiFormat === 'anthropic-messages') {
-    return { success: false, error: 'Anthropic does not support model listing via API' }
-  }
-
-  const rawBaseUrl = baseUrl || getBuiltinProviderById(provider)?.defaultBaseUrl || ''
-  if (!rawBaseUrl) {
-    return { success: false, error: 'No base URL provided' }
-  }
-
-  const abortController = new AbortController()
-  const timeout = setTimeout(() => abortController.abort(), 15000)
-
-  try {
-    let url: string
-    const headers: Record<string, string> = {
-      ...buildChatLabUserAgentHeaders(),
-    }
-
-    if (effectiveApiFormat === 'google-generative-ai') {
-      const trimmed = rawBaseUrl.replace(/\/+$/, '').replace(/\/v1(beta)?$/, '')
-      url = `${trimmed}/v1beta/models?key=${apiKey}`
-    } else {
-      // openai-completions / openai-responses: resolve /v1 auto
-      let resolved = rawBaseUrl.replace(/\/+$/, '')
-      try {
-        const parsed = new URL(resolved)
-        if (!resolved.endsWith('/v1') && (parsed.pathname === '/' || parsed.pathname === '')) {
-          resolved = resolved + '/v1'
-        }
-      } catch {
-        // ignore
-      }
-      url = `${resolved}/models`
-      headers['Authorization'] = `Bearer ${apiKey}`
-    }
-
-    aiLogger.info('LLM', 'Fetching remote models', { url: url.replace(/key=[^&]+/, 'key=***'), provider })
-
-    const response = await fetch(url, {
-      method: 'GET',
-      headers,
-      signal: abortController.signal,
-    })
-
-    if (!response.ok) {
-      const body = await response.text().catch(() => '')
-      return { success: false, error: `HTTP ${response.status}: ${body.slice(0, 200)}` }
-    }
-
-    const json = await response.json()
-
-    let models: RemoteModel[]
-
-    if (effectiveApiFormat === 'google-generative-ai') {
-      const geminiModels = (json.models || []) as Array<{
-        name?: string
-        displayName?: string
-        inputTokenLimit?: number
-      }>
-      models = geminiModels.map((m) => {
-        const id = (m.name || '').replace(/^models\//, '')
-        return {
-          id,
-          name: m.displayName || id,
-          ownedBy: 'google',
-          contextWindow: m.inputTokenLimit || undefined,
-        }
-      })
-    } else {
-      // OpenAI-standard format: { data: [{ id, owned_by, context_length? }] }
-      const data = (json.data || []) as Array<{
-        id?: string
-        owned_by?: string
-        context_length?: number
-      }>
-      models = data
-        .filter((m) => m.id)
-        .map((m) => ({
-          id: m.id!,
-          name: m.id!,
-          ownedBy: m.owned_by,
-          contextWindow: m.context_length || undefined,
-        }))
-    }
-
-    aiLogger.info('LLM', `Fetched ${models.length} remote models`, { provider })
-    return { success: true, models }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    if (message.includes('aborted') || message.includes('AbortError')) {
-      return { success: false, error: 'Request timed out (15s)' }
-    }
-    return { success: false, error: message }
-  } finally {
-    clearTimeout(timeout)
-  }
+  return fetchRemoteModelsCore(provider, apiKey, baseUrl, apiFormat, electronRemoteApiOptions())
 }
 
 export async function validateApiKey(
@@ -566,47 +468,5 @@ export async function validateApiKey(
   baseUrl?: string,
   model?: string
 ): Promise<{ success: boolean; error?: string }> {
-  try {
-    const providerInfo = getProviderInfo(provider)
-    const config: AIServiceConfig = {
-      id: 'validate-temp',
-      name: 'validate-temp',
-      provider,
-      apiKey,
-      baseUrl,
-      model: model || providerInfo?.models?.[0]?.id,
-      createdAt: 0,
-      updatedAt: 0,
-    }
-    const piModel = buildPiModel(config)
-
-    const abortController = new AbortController()
-    const timeout = setTimeout(() => abortController.abort(), 15000)
-
-    try {
-      const result = await completeSimple(
-        piModel,
-        {
-          messages: [{ role: 'user', content: 'Hi', timestamp: Date.now() }],
-        },
-        {
-          apiKey,
-          maxTokens: 1,
-          signal: abortController.signal,
-        }
-      )
-      if (result.stopReason === 'error' || result.stopReason === 'aborted') {
-        return { success: false, error: result.errorMessage || 'Connection failed' }
-      }
-      return { success: true }
-    } finally {
-      clearTimeout(timeout)
-    }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    if (message.includes('aborted') || message.includes('AbortError')) {
-      return { success: false, error: 'Request timed out (15s)' }
-    }
-    return { success: false, error: message }
-  }
+  return validateApiKeyCore(provider, apiKey, baseUrl, model, undefined, electronRemoteApiOptions())
 }
