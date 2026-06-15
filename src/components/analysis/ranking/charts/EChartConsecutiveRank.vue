@@ -7,7 +7,7 @@ import { computed } from 'vue'
 import type { EChartsOption, BarSeriesOption } from 'echarts'
 import { EChart } from '@/components/charts'
 import { SectionCard, ScrollableChart } from '@/components/UI'
-import { useRankingLayout } from '@/utils/rankingChartLayout'
+import { truncateRankName, useRankingLayout } from '@/utils/rankingChartLayout'
 
 interface ConsecutiveItem {
   memberId: number
@@ -74,18 +74,12 @@ const barColorInactive = {
   ],
 }
 
-// 截断名字
-function truncateName(name: string, maxLength = 8): string {
-  if (name.length <= maxLength) return name
-  return name.slice(0, maxLength) + '…'
-}
-
 // 生成 ECharts 配置
 const option = computed<EChartsOption>(() => {
   if (displayData.value.length === 0) return {}
 
   const reversedData = [...displayData.value].reverse()
-  const names = reversedData.map((item) => truncateName(item.name, rankingLayout.value.labelMaxLength))
+  const names = reversedData.map((item) => truncateRankName(item.name, rankingLayout.value.labelMaxLength))
   const maxValue = Math.max(...displayData.value.map((item) => item.maxConsecutiveDays), 1)
 
   return {

@@ -7,7 +7,7 @@ import { computed } from 'vue'
 import type { EChartsOption, BarSeriesOption } from 'echarts'
 import { EChart } from '@/components/charts'
 import { SectionCard, ScrollableChart } from '@/components/UI'
-import { useRankingLayout } from '@/utils/rankingChartLayout'
+import { truncateRankName, useRankingLayout } from '@/utils/rankingChartLayout'
 
 interface TimeRankItem {
   memberId: number
@@ -62,12 +62,6 @@ const barColor = {
   ],
 }
 
-// 截断名字
-function truncateName(name: string, maxLength = 8): string {
-  if (name.length <= maxLength) return name
-  return name.slice(0, maxLength) + '…'
-}
-
 // 格式化时间
 function formatTime(ms: number): string {
   return (ms / 1000).toFixed(2) + 's'
@@ -78,7 +72,7 @@ const option = computed<EChartsOption>(() => {
   if (displayData.value.length === 0) return {}
 
   const reversedData = [...displayData.value].reverse()
-  const names = reversedData.map((item) => truncateName(item.name, rankingLayout.value.labelMaxLength))
+  const names = reversedData.map((item) => truncateRankName(item.name, rankingLayout.value.labelMaxLength))
 
   // 计算相对值：第一名时间最短，进度条最长（100%）
   // 使用反比例：第一名时间 / 当前时间 * 100

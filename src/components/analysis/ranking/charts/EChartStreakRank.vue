@@ -7,7 +7,7 @@ import { computed } from 'vue'
 import type { EChartsOption, BarSeriesOption } from 'echarts'
 import { EChart } from '@/components/charts'
 import { SectionCard, ScrollableChart } from '@/components/UI'
-import { useRankingLayout } from '@/utils/rankingChartLayout'
+import { truncateRankName, useRankingLayout } from '@/utils/rankingChartLayout'
 
 interface StreakItem {
   memberId: number
@@ -88,12 +88,6 @@ const activeColor = {
   ],
 }
 
-// 截断名字
-function truncateName(name: string, maxLength = 8): string {
-  if (name.length <= maxLength) return name
-  return name.slice(0, maxLength) + '…'
-}
-
 // 格式化日期区间
 function formatDateRange(start: string, end: string): string {
   return `${start} ~ ${end}`
@@ -107,7 +101,7 @@ function getValue(item: StreakItem): number {
 // 生成 ECharts 配置
 const option = computed<EChartsOption>(() => {
   const reversedData = [...displayData.value].reverse()
-  const names = reversedData.map((item) => truncateName(item.name, rankingLayout.value.labelMaxLength))
+  const names = reversedData.map((item) => truncateRankName(item.name, rankingLayout.value.labelMaxLength))
   const values = reversedData.map((item) => getValue(item))
   const maxValue = Math.max(...values, 1)
 

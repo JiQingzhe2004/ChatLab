@@ -35,5 +35,5 @@ export function useRankingLayout(): ComputedRef<RankingLayoutConfig> {
 
 export function truncateRankName(name: string, maxLength: number): string {
   if (name.length <= maxLength) return name
-  return `${name.slice(0, maxLength)}...`
+  return `${name.slice(0, maxLength)}…`
 }

@@ -8,7 +8,7 @@ import type { EChartsOption, BarSeriesOption } from 'echarts'
 import { EChart } from '@/components/charts'
 import { SectionCard, Tabs, TopNSelect } from '@/components/UI'
 import { formatFullDateTime } from '@/utils/dateFormat'
-import { useRankingLayout } from '@/utils/rankingChartLayout'
+import { truncateRankName, useRankingLayout } from '@/utils/rankingChartLayout'
 
 interface DivingItem {
   memberId: number
@@ -86,12 +86,6 @@ const barColor = {
   ],
 }
 
-// 截断名字
-function truncateName(name: string, maxLength = 8): string {
-  if (name.length <= maxLength) return name
-  return name.slice(0, maxLength) + '…'
-}
-
 // 格式化天数显示
 function formatDays(days: number): string {
   if (days === 0) return '今天'
@@ -104,7 +98,7 @@ const option = computed<EChartsOption>(() => {
   if (displayData.value.length === 0) return {}
 
   const reversedData = [...displayData.value].reverse()
-  const names = reversedData.map((item) => truncateName(item.name, rankingLayout.value.labelMaxLength))
+  const names = reversedData.map((item) => truncateRankName(item.name, rankingLayout.value.labelMaxLength))
   const maxDays = Math.max(...displayData.value.map((item) => item.daysSinceLastMessage), 1)
 
   const dataWithStyle = reversedData.map((item) => ({
