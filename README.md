@@ -14,7 +14,7 @@ English | [简体中文](./README.zh-CN.md)
 
 ChatLab is an open-source desktop app for understanding your social conversations. It combines a flexible SQL engine with AI agents so you can explore patterns, ask better questions, and extract insights from chat data, all on your own machine.
 
-Currently supported: **WhatsApp, LINE, WeChat, QQ, Discord, Instagram, and Telegram**. Coming next: **iMessage, Messenger, and KakaoTalk**.
+Currently supported: **WhatsApp, LINE, QQ, Discord, Instagram, Telegram, and iMessage**. Coming next: **Messenger and KakaoTalk**.
 
 > New install? Start here: [Getting started](https://docs.chatlab.fun/usage/quick-start)
 
@@ -105,11 +105,17 @@ For complete contributor instructions, see the [Development Guide](https://docs.
 # Install dependencies
 pnpm install
 
-# Run desktop app in dev mode
+# Start dev mode — prompts you to choose which app to launch
 pnpm dev
+```
 
-# Run CLI in dev mode (apps/cli)
-cd apps/cli && pnpm dev
+Or launch a specific target directly:
+
+```bash
+pnpm dev:desktop   # Electron desktop app
+pnpm dev:web       # Web frontend + local server
+pnpm dev:serve     # CLI server only
+pnpm docs:dev      # Docs site
 ```
 
 If Electron encounters exceptions during startup, you can try using `electron-fix`:

@@ -14,7 +14,7 @@
 
 ChatLab 是一个专注于聊天记录分析的本地化应用。通过 AI Agent和灵活的 SQL 引擎，你可以自由地分析你的聊天记录数据。
 
-目前已支持：**WhatsApp、LINE、QQ、Discord、Instagram、Telegram**。即将支持：iMessage、Messenger、KakaoTalk。
+目前已支持：**WhatsApp、LINE、QQ、Discord、Instagram、Telegram、iMessage**。即将支持：Messenger、KakaoTalk。
 
 > 首次安装？从这里开始：[快速开始](https://docs.chatlab.fun/cn/usage/quick-start)
 
@@ -105,11 +105,17 @@ ChatLab 是一个基于 pnpm monorepo 的工程，桌面端使用 Electron + Vue
 # 安装依赖
 pnpm install
 
-# 启动桌面端开发模式
+# 启动开发模式 — 会提示选择要启动的目标
 pnpm dev
+```
 
-# 启动 CLI 开发模式（apps/cli）
-cd apps/cli && pnpm dev
+也可以直接启动指定目标：
+
+```bash
+pnpm dev:desktop   # Electron 桌面端
+pnpm dev:web       # 前端 + 本地服务
+pnpm dev:serve     # 仅 CLI 服务端
+pnpm docs:dev      # 文档站
 ```
 
 若 Electron 在启动时异常，可尝试使用 `electron-fix`：

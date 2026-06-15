@@ -1,5 +1,7 @@
 # ChatLab Public Docs
 
+Documentation site: **https://docs.chatlab.fun** (English) · **https://docs.chatlab.fun/cn/** (简体中文)
+
 This directory contains the source for the public documentation site.
 
 - Production site: `https://docs.chatlab.fun`
@@ -25,4 +27,3 @@ This directory contains the source for the public documentation site.
 - When adding or moving public docs, update the sidebar in `docs/.vitepress/config.mts`.
 - When adding images or attachments referenced by docs pages, place only the required assets under `docs/public/`.
 
-See `.docs/features/public-docs.md` for internal build and deployment notes.

@@ -155,6 +155,5 @@ AI can help read code, draft patches, and add tests, but public PRs must remain 
 
 - Obvious bug fixes can be submitted directly.
 - For new features, open an Issue for discussion first. Feature PRs submitted without prior discussion may be closed.
-- Keep one PR focused on one task. Split large changes into independent PRs when possible.
 - Use Conventional Commits, such as `fix(import): handle empty source` or `docs: add contributor guide`.
 - Use platform scopes such as `electron`, `cli`, or `web` only for platform-specific changes. For general changes, use the module name as the scope.

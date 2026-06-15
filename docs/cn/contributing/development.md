@@ -154,7 +154,6 @@ AI 可以帮助阅读代码、生成补丁和补测试，但公开 PR 必须让 
 ## PR 与提交规范
 
 - 明显的 Bug 修复可以直接提交 PR。
-- 新功能请先提交 Issue 讨论；未经讨论直接提交的新功能 PR 可能会被关闭。
-- 一个 PR 尽量只做一件事，较大的改动请拆成多个独立 PR。
+- **新功能请先提交 Issue 讨论；未经讨论直接提交的新功能 PR 可能会被关闭。**
 - 提交信息使用 Conventional Commits，例如 `fix(import): handle empty source` 或 `docs: add contributor guide`。
 - 仅当改动是平台特有时使用平台 scope，例如 `electron`、`cli`、`web`；通用改动使用模块名作为 scope。
