@@ -1,5 +1,26 @@
 # Changelog
 
+## v0.29.0 (2026-07-01)
+
+> Add Contacts, introduce the relationship galaxy, and improve contact computation, avatar loading, and sidebar performance.
+
+### ✨ Features
+
+- Add the People module with Contacts as a subpage, plus cross-session contact aggregation, time range filters, pagination, and virtual scrolling
+- Let the Contacts page manually mark group members as friends, with entry points for source conversations and chat record viewing
+- Add an interaction relationship galaxy with a 3D panorama, node filters, search, a detail panel, and related contacts/group exploration
+- Add High Association and Friends Only filters to the relationship galaxy, and mask names in privacy mode
+- [Desktop] Download app updates silently in the background
+
+### ⚡ Performance
+
+- Use pagination and virtual scrolling for contact lists to reduce render pressure with many friends and group members
+- Lazy-load avatars and virtualize the sidebar session list to reduce startup and page switching stutter
+
+### 💄 Styles
+
+- Align the dark mode main background, relationship page header, and sidebar selected state
+
 ## v0.28.1 (2026-06-26)
 
 > Improve chat record viewing, add the import API, and fix import, sync, and local model proxy download issues.
